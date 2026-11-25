@@ -2542,7 +2542,8 @@ Untuk SETIAP potongan FOTO #1 sampai FOTO #${imgs.length}, baca kartu watermark 
 
         function parseWatermarkText(rawText) {
             const lines = rawText
-                .split(/?
+                .split(/
+?
 /)
                 .map(l => l.trim().toUpperCase())
                 .filter(Boolean);
