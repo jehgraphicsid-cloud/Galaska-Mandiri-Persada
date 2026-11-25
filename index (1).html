@@ -1,0 +1,2950 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Laporan Dokumentasi Pekerjaan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+            .page-container {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 !important;
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col items-center justify-start">
+
+    <!-- Header Navigasi -->
+    <header class="bg-slate-900 text-white shadow-md no-print py-3 px-6 flex flex-wrap justify-between items-center gap-4 w-full">
+        <div class="flex items-center space-x-3 mx-auto sm:mx-0">
+            <div class="bg-blue-600 p-2.5 rounded-xl text-xl">
+                <i class="fa-solid fa-camera-retro"></i>
+            </div>
+            <div class="text-center sm:text-left">
+                <h1 class="text-xs md:text-sm font-black uppercase">APLIKASI LAPORAN DOKUMENTASI PROYEK (5 BARIS / HALAMAN A4)</h1>
+                <p class="text-[10px] text-slate-400 font-semibold uppercase">TAHAP 3 • KAMERA WATERMARK COMBAT • GABUNG SETORAN MULTI-TIM • JALUR A/B 1KM</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-2">
+            <button type="button" id="btnToggleCombatMode" onclick="toggleCombatMode()" class="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-2 shadow uppercase ring-2 ring-red-400/40" title="BUKA / TUTUP KAMERA WATERMARK LAPANGAN COMBAT">
+                <i class="fa-solid fa-crosshairs"></i> <span id="combatModeLabel">KAMERA COMBAT</span>
+            </button>
+            <button type="button" onclick="undoAction()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow uppercase" title="UNDO (CTRL+Z)">
+                <i class="fa-solid fa-rotate-left"></i> UNDO
+            </button>
+            <button type="button" onclick="addNewRow()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow uppercase" title="TAMBAH BARIS">
+                <i class="fa-solid fa-plus"></i> TAMBAH BARIS
+            </button>
+            <label class="bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow cursor-pointer uppercase" title="UPLOAD BANYAK FOTO SEKALIGUS & KELOMPOKKAN OTOMATIS">
+                <i class="fa-solid fa-images"></i> UPLOAD BANYAK FOTO
+                <input type="file" id="batchUploadInput" accept="image/*" multiple class="hidden" onchange="handleBatchImageUpload(event)">
+            </label>
+            <label class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow cursor-pointer uppercase" title="GABUNG FILE SETORAN JSON DARI TIM 0-50% & TIM 100% QC (IPHONE/ANDROID)">
+                <i class="fa-solid fa-people-arrows"></i> GABUNG SETORAN TIM
+                <input type="file" id="mergeTeamJsonInput" accept=".json" multiple class="hidden" onchange="mergeTeamJsonFiles(event)">
+            </label>
+            <button type="button" onclick="saveProjectData()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow uppercase" title="SAVE JSON SETORAN / PROYEK">
+                <i class="fa-solid fa-floppy-disk"></i> SAVE JSON
+            </button>
+            <label class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow cursor-pointer uppercase" title="BUKA / TIMPA DENGAN FILE JSON">
+                <i class="fa-solid fa-folder-open"></i> LOAD JSON
+                <input type="file" id="loadJsonInput" accept=".json" class="hidden" onchange="loadProjectData(event)">
+            </label>
+            <button type="button" onclick="saveAsPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow uppercase" title="SAVE PDF">
+                <i class="fa-solid fa-file-pdf"></i> SAVE PDF
+            </button>
+            <button type="button" onclick="resetData()" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 shadow uppercase" title="RESET">
+                <i class="fa-solid fa-rotate-right"></i> RESET
+            </button>
+        </div>
+    </header>
+
+    <!-- Panel Picker Rencana 1 & Rekap Status Tim Tahap 2 -->
+    <section class="bg-white border-b border-slate-300 px-6 py-2.5 no-print w-full shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[10px] font-black uppercase text-slate-700 mr-1">
+                    <i class="fa-solid fa-sliders text-blue-600 mr-1"></i>PILIHAN CEPAT JUDUL:
+                </span>
+
+                <select id="pickerJenisPekerjaan" onchange="applyQuickTitlePicker()"
+                        class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-[11px] font-extrabold text-slate-900 uppercase focus:outline-none focus:border-blue-600">
+                    <option value="">-- PILIH PEKERJAAN --</option>
+                    <option value="PEKERJAAN LERENG">PEKERJAAN LERENG</option>
+                    <option value="PEKERJAAN ROUNDING">PEKERJAAN ROUNDING</option>
+                    <option value="PEKERJAAN MEDIAN">PEKERJAAN MEDIAN</option>
+                    <option value="PEKERJAAN SALURAN AIR / DRAINASE">PEKERJAAN SALURAN AIR / DRAINASE</option>
+                    <option value="PEKERJAAN SWEEPING KEBERSIHAN JALUR">PEKERJAAN SWEEPING KEBERSIHAN JALUR</option>
+                    <option value="PEKERJAAN PEMOTONGAN RUMPUT">PEKERJAAN PEMOTONGAN RUMPUT</option>
+                    <option value="PEKERJAAN PANGKAS POHON">PEKERJAAN PANGKAS POHON</option>
+                    <option value="PEKERJAAN POT MEDIAN">PEKERJAAN POT MEDIAN</option>
+                </select>
+
+                <div class="inline-flex rounded-lg overflow-hidden border border-slate-300 bg-slate-100" role="group" aria-label="Pilihan Jalur A dan B">
+                    <button type="button" id="btnJalurA" onclick="selectJalur('A')"
+                            class="px-3 py-1.5 text-[11px] font-black uppercase transition bg-blue-600 text-white">
+                        JALUR A
+                    </button>
+                    <button type="button" id="btnJalurB" onclick="selectJalur('B')"
+                            class="px-3 py-1.5 text-[11px] font-black uppercase transition bg-slate-100 text-slate-700 hover:bg-slate-200">
+                        JALUR B
+                    </button>
+                </div>
+
+                <select id="pickerStaRange" onchange="applyQuickTitlePicker()"
+                        class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-[11px] font-extrabold text-slate-900 uppercase focus:outline-none focus:border-blue-600">
+                </select>
+
+                <button type="button" onclick="applyQuickTitlePicker(true)"
+                        class="bg-slate-900 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition flex items-center gap-1.5 shadow-sm"
+                        title="TERAPKAN KE JUDUL BARIS AKTIF & GABUNGKAN JIKA JUDUL SAMA">
+                    <i class="fa-solid fa-check"></i> PASANG KE BARIS AKTIF
+                </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase">
+                <button type="button" id="filterAllBtn" onclick="setRowCompletenessFilter('ALL')"
+                        class="px-2.5 py-1 rounded-md border border-slate-800 bg-slate-800 text-white transition">
+                    SEMUA (<span id="countAllRows">0</span>)
+                </button>
+                <button type="button" id="filterIncompleteBtn" onclick="setRowCompletenessFilter('INCOMPLETE')"
+                        class="px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition">
+                    PENDING QC / BELUM LENGKAP (<span id="countIncompleteRows">0</span>)
+                </button>
+                <button type="button" id="filterCompleteBtn" onclick="setRowCompletenessFilter('COMPLETE')"
+                        class="px-2.5 py-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition">
+                    LENGKAP 3/3 (<span id="countCompleteRows">0</span>)
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Informasi Panduan & Slot Aktif -->
+    <div class="bg-slate-50 border-b border-slate-200 px-6 py-2 no-print flex flex-wrap justify-between items-center text-[11px] font-bold text-slate-800 w-full gap-2 text-center sm:text-left">
+        <div class="flex items-center justify-center gap-2 mx-auto sm:mx-0 uppercase">
+            <i class="fa-solid fa-circle-info text-blue-600"></i>
+            <span>KLIK <span class="text-red-600 font-black">KAMERA COMBAT</span> UNTUK JEPRET WATERMARK DI HP • GABUNG SETORAN TIM <span class="text-purple-700 font-black">0-50% & 100% QC</span> • TEKAN <kbd class="bg-white px-1.5 py-0.5 rounded border border-slate-300 font-mono">Q</kbd> / <kbd class="bg-white px-1.5 py-0.5 rounded border border-slate-300 font-mono">CTRL+V</kbd>.</span>
+        </div>
+        <div id="activeSlotIndicator" class="font-black text-slate-900 bg-slate-200 px-3 py-1 rounded-full border border-slate-300 mx-auto sm:mx-0 uppercase">
+            SLOT AKTIF: BARIS 1 - 0%
+        </div>
+    </div>
+
+    <!-- MODAL / LAYAR KAMERA WATERMARK COMBAT (TAHAP 3) -->
+    <div id="combatCameraModal" class="fixed inset-0 bg-slate-950 text-white z-50 hidden flex-col overflow-y-auto no-print">
+        <div class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
+            <div class="flex items-center gap-2.5">
+                <span class="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-wider">COMBAT CAM</span>
+                <div>
+                    <div class="text-xs font-black uppercase tracking-tight">GALASKA MANDIRI PERSADA • KANCI - PEJAGAN</div>
+                    <div id="combatLiveClock" class="text-[10px] font-mono text-cyan-400 font-bold">MEMUAT WAKTU...</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="saveProjectData()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-black uppercase flex items-center gap-1.5">
+                    <i class="fa-solid fa-paper-plane"></i> KIRIM JSON
+                </button>
+                <button type="button" onclick="closeCombatMode()" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-black uppercase flex items-center gap-1.5 border border-slate-700">
+                    <i class="fa-solid fa-xmark"></i> TUTUP
+                </button>
+            </div>
+        </div>
+
+        <div class="max-w-2xl w-full mx-auto p-4 flex flex-col gap-3.5 pb-12">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-3">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-[10px] font-black uppercase text-slate-400">PROGRES FOTO:</span>
+                    <div class="grid grid-cols-3 gap-1.5 flex-1 max-w-xs">
+                        <button type="button" id="combatProg0" onclick="setCombatProgress('p0')" class="py-2 rounded-xl text-xs font-black uppercase border transition bg-blue-600 border-blue-400 text-white">
+                            0% AWAL
+                        </button>
+                        <button type="button" id="combatProg50" onclick="setCombatProgress('p50')" class="py-2 rounded-xl text-xs font-black uppercase border transition bg-slate-800 border-slate-700 text-slate-300">
+                            50% PROSES
+                        </button>
+                        <button type="button" id="combatProg100" onclick="setCombatProgress('p100')" class="py-2 rounded-xl text-xs font-black uppercase border transition bg-slate-800 border-slate-700 text-slate-300">
+                            100% QC
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-[10px] font-black uppercase text-slate-400">IDENTITAS TIM:</span>
+                    <input type="text" id="combatTeamInput" value="TIM-LAPANGAN" oninput="combatConfig.team = this.value.toUpperCase()"
+                           placeholder="CONTOH: TIM-0-50 / QC-100"
+                           class="flex-1 max-w-xs bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-black text-purple-300 uppercase focus:outline-none focus:border-purple-500" />
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-2.5">
+                <div class="text-[10px] font-black uppercase text-slate-400">LOKASI & JENIS PEKERJAAN (SEKALI TAP):</div>
+                <select id="combatJobSelect" onchange="syncCombatTitleFromPickers()"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-black text-white uppercase focus:outline-none focus:border-blue-500">
+                    <option value="PEKERJAAN LERENG">PEKERJAAN LERENG</option>
+                    <option value="PEKERJAAN ROUNDING" selected>PEKERJAAN ROUNDING</option>
+                    <option value="PEKERJAAN MEDIAN">PEKERJAAN MEDIAN</option>
+                    <option value="PEKERJAAN SALURAN AIR / DRAINASE">PEKERJAAN SALURAN AIR / DRAINASE</option>
+                    <option value="PEKERJAAN SWEEPING KEBERSIHAN JALUR">PEKERJAAN SWEEPING KEBERSIHAN JALUR</option>
+                    <option value="PEKERJAAN PEMOTONGAN RUMPUT">PEKERJAAN PEMOTONGAN RUMPUT</option>
+                    <option value="PEKERJAAN PANGKAS POHON">PEKERJAAN PANGKAS POHON</option>
+                    <option value="PEKERJAAN POT MEDIAN">PEKERJAAN POT MEDIAN</option>
+                </select>
+
+                <div class="grid grid-cols-4 gap-2">
+                    <button type="button" id="combatBtnJalurA" onclick="setCombatJalur('A')"
+                            class="py-2 rounded-xl text-xs font-black uppercase bg-blue-600 text-white border border-blue-400">
+                        JALUR A
+                    </button>
+                    <button type="button" id="combatBtnJalurB" onclick="setCombatJalur('B')"
+                            class="py-2 rounded-xl text-xs font-black uppercase bg-slate-800 text-slate-300 border border-slate-700">
+                        JALUR B
+                    </button>
+                    <select id="combatStaSelect" onchange="syncCombatTitleFromPickers()"
+                            class="col-span-2 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs font-black text-cyan-300 uppercase focus:outline-none focus:border-cyan-500">
+                    </select>
+                </div>
+
+                <input type="text" id="combatCustomTitleInput" oninput="combatConfig.customTitle = this.value.toUpperCase()"
+                       placeholder="JUDUL LENGKAP WATERMARK..."
+                       class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-black text-amber-300 uppercase focus:outline-none focus:border-amber-500" />
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div class="relative bg-black aspect-[4/3] w-full flex items-center justify-center overflow-hidden">
+                    <video id="combatVideoStream" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <div id="combatCamFallbackNotice" class="hidden absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center p-4 text-center gap-2">
+                        <i class="fa-solid fa-camera-rotate text-2xl text-amber-400"></i>
+                        <p id="combatCamErrorText" class="text-xs font-bold text-slate-300 uppercase">KAMERA LIVE TIDAK TERSEDIA / IZIN DITOLAK. GUNAKAN TOMBOL GALERI / KAMERA HP DI BAWAH.</p>
+                    </div>
+
+                    <div class="absolute top-2.5 left-2.5 right-2.5 flex justify-between items-start pointer-events-none gap-2">
+                        <span id="combatHudProgressBadge" class="bg-blue-600/95 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow uppercase">
+                            PROGRES: 0%
+                        </span>
+                        <span id="combatHudTeamBadge" class="bg-purple-700/95 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow uppercase truncate max-w-[160px]">
+                            TIM-LAPANGAN
+                        </span>
+                    </div>
+
+                    <div class="absolute bottom-2 left-2 right-2 bg-slate-950/90 border border-cyan-400/70 rounded-xl px-3 py-2 pointer-events-none">
+                        <div class="flex items-center justify-between text-[9px] font-black text-cyan-300 uppercase mb-0.5">
+                            <span>PT GALASKA MANDIRI PERSADA</span>
+                            <span id="combatHudTimeText">WAKTU...</span>
+                        </div>
+                        <div id="combatHudTitleText" class="text-[11px] font-black text-white uppercase truncate">
+                            PEKERJAAN ROUNDING KM 214+600A S/D KM 215+600A
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3.5 bg-slate-900 flex flex-col gap-2.5">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" onclick="switchCombatCameraFacing()" class="bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-1.5 border border-slate-700">
+                            <i class="fa-solid fa-camera-rotate"></i> PUTAR
+                        </button>
+                        <button type="button" id="btnSnapCombatPhoto" onclick="captureCombatPhoto()" class="col-span-2 bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white py-3 rounded-xl text-sm font-black uppercase flex items-center justify-center gap-2 shadow-lg">
+                            <i class="fa-solid fa-circle-dot"></i> JEPRET WATERMARK
+                        </button>
+                    </div>
+
+                    <label class="w-full bg-cyan-700 hover:bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 cursor-pointer transition">
+                        <i class="fa-solid fa-mobile-screen-button"></i> PILIH FOTO / KAMERA BAWAAN HP
+                        <input type="file" id="combatGalleryInput" accept="image/*" capture="environment" class="hidden" onchange="handleCombatGalleryFile(event)">
+                    </label>
+                </div>
+            </div>
+
+            <div id="combatLastShotCard" class="hidden bg-slate-900 border border-emerald-500/50 rounded-2xl p-3.5 flex flex-col gap-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-black text-emerald-400 uppercase"><i class="fa-solid fa-check-circle mr-1"></i>HASIL JEPRETAN TERAKHIR (MASUK LAPORAN)</span>
+                    <button type="button" onclick="saveProjectData()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase">
+                        UNDUH SETORAN .JSON
+                    </button>
+                </div>
+                <img id="combatLastShotPreview" src="" alt="Hasil Jepretan Watermark" class="w-full rounded-xl border border-slate-700 object-contain max-h-72 bg-black" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Workspace Dokumen A4 -->
+    <main class="flex-grow p-4 md:p-6 flex flex-col items-center justify-center gap-6 pb-28 w-full max-w-7xl mx-auto" id="documentWorkspace">
+        <!-- Halaman A4 dinamis dimuat di sini -->
+    </main>
+
+    <!-- Floating Action Menu (FAB) -->
+    <div id="fabContainer" class="fixed bottom-6 right-6 z-50 no-print flex flex-col items-end gap-3">
+        <div id="fabMenu" class="flex flex-col items-end gap-2 transition-all duration-200 transform scale-0 opacity-0 pointer-events-none origin-bottom-right">
+            <button type="button" onclick="closeFabMenu(); openCombatMode()" class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="KAMERA WATERMARK COMBAT">
+                <span>KAMERA COMBAT</span>
+                <i class="fa-solid fa-crosshairs w-5 text-center"></i>
+            </button>
+            <label onclick="closeFabMenu()" class="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 cursor-pointer uppercase" title="GABUNG SETORAN TIM JSON">
+                <span>GABUNG SETORAN TIM</span>
+                <i class="fa-solid fa-people-arrows w-5 text-center"></i>
+                <input type="file" accept=".json" multiple class="hidden" onchange="mergeTeamJsonFiles(event)">
+            </label>
+            <label onclick="closeFabMenu()" class="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 cursor-pointer uppercase" title="UPLOAD BANYAK FOTO SEKALIGUS">
+                <span>UPLOAD BANYAK FOTO</span>
+                <i class="fa-solid fa-images w-5 text-center"></i>
+                <input type="file" accept="image/*" multiple class="hidden" onchange="handleBatchImageUpload(event)">
+            </label>
+            <button type="button" onclick="closeFabMenu(); triggerPasteFromClipboard()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="PASTE GAMBAR (Q)">
+                <span>PASTE GAMBAR (Q)</span>
+                <i class="fa-solid fa-paste w-5 text-center"></i>
+            </button>
+            <button type="button" onclick="closeFabMenu(); addNewRow()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="TAMBAH BARIS">
+                <span>TAMBAH BARIS</span>
+                <i class="fa-solid fa-plus w-5 text-center"></i>
+            </button>
+            <button type="button" onclick="closeFabMenu(); undoAction()" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="UNDO (CTRL+Z)">
+                <span>UNDO (CTRL+Z)</span>
+                <i class="fa-solid fa-rotate-left w-5 text-center"></i>
+            </button>
+            <button type="button" onclick="closeFabMenu(); saveProjectData()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="SAVE JSON">
+                <span>SAVE JSON</span>
+                <i class="fa-solid fa-floppy-disk w-5 text-center"></i>
+            </button>
+            <label onclick="closeFabMenu()" class="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 cursor-pointer uppercase" title="LOAD JSON">
+                <span>LOAD JSON</span>
+                <i class="fa-solid fa-folder-open w-5 text-center"></i>
+                <input type="file" accept=".json" class="hidden" onchange="loadProjectData(event)">
+            </label>
+            <button type="button" onclick="closeFabMenu(); saveAsPDF()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="SAVE PDF">
+                <span>SAVE PDF</span>
+                <i class="fa-solid fa-file-pdf w-5 text-center"></i>
+            </button>
+            <button type="button" onclick="closeFabMenu(); resetData()" class="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black transition hover:scale-105 uppercase" title="RESET DATA">
+                <span>RESET DATA</span>
+                <i class="fa-solid fa-rotate-right w-5 text-center"></i>
+            </button>
+        </div>
+        <button id="fabToggleBtn" type="button" onclick="toggleFabMenu(event)" class="bg-slate-900 hover:bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-xl transition-all duration-200 focus:outline-none ring-4 ring-slate-900/20" title="BUKA / TUTUP MENU AKSI CEPAT">
+            <i id="fabIconOpen" class="fa-solid fa-bars"></i>
+            <i id="fabIconClose" class="fa-solid fa-xmark hidden"></i>
+        </button>
+    </div>
+
+    <!-- Toast Notifikasi -->
+    <div id="toast" class="fixed bottom-6 left-6 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl z-50 transform translate-y-32 opacity-0 transition-all duration-300 flex items-center gap-3">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+        <div>
+            <h4 id="toastTitle" class="text-xs font-black uppercase">BERHASIL</h4>
+            <p id="toastMsg" class="text-[11px] text-slate-300 font-semibold uppercase">AKSI BERHASIL DILAKUKAN.</p>
+        </div>
+    </div>
+
+    <!-- Modal Progress Batch Upload -->
+    <div id="batchUploadModal" class="fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 text-center">
+            <div class="w-12 h-12 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xl mx-auto mb-3">
+                <i class="fa-solid fa-layer-group fa-bounce"></i>
+            </div>
+            <h3 class="text-sm font-black text-slate-900 uppercase mb-1">MENYUSUN & MENGELOMPOKKAN FOTO</h3>
+            <p id="batchProgressStatus" class="text-xs font-bold text-slate-600 mb-4 uppercase">MEMBACA WATERMARK FOTO 0 / 0...</p>
+            <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden mb-2">
+                <div id="batchProgressBar" class="bg-cyan-600 h-full transition-all duration-200" style="width: 0%"></div>
+            </div>
+            <p class="text-[10px] font-semibold text-slate-500 uppercase">MENYATUKAN FOTO LINTAS WAKTU & TIM BERDASARKAN JUDUL PEKERJAAN</p>
+        </div>
+    </div>
+
+    <script>
+        let selectedJalur = 'A';
+        let rowCompletenessFilter = 'ALL';
+
+        let combatConfig = {
+            isOpen: false,
+            progressKey: 'p0',
+            jalur: 'A',
+            team: 'TIM-LAPANGAN',
+            customTitle: '',
+            facingMode: 'environment',
+            stream: null,
+            clockTimer: null
+        };
+
+        let reportData = {
+            headerPeriode: "12 - 18 OKTOBER 2026",
+            endDateFull: "18 OKTOBER 2026",
+            headerLokasi: "MAINLANE A DAN B",
+            headerMinggu: "34",
+            coverUseCyan: true,
+            signLeftTitle: "DIPERIKSA OLEH,",
+            signLeftCompany: "PT SEMESTA MARGA RAYA",
+            signLeftName: "MUHAMAD ISKHAQ",
+            signLeftRole: "STAFF PEMELIHARAAN",
+            signRightLocationDate: "CIREBON, 18 OKTOBER 2026",
+            signRightTitle: "DIBUAT OLEH,",
+            signRightCompany: "PT GALASKA MANDIRI PERSADA",
+            signRightName: "AHMAD NU'MAN NUR AZHAR",
+            signRightRole: "PROJECT MANAGER",
+            rows: [
+                { id: 1, date: "SENIN, 12 OKTOBER 2026", title: "PEKERJAAN ROUNDING KM 230+600B S/D KM 228+600B", p0: "", p50: "", p100: "", t0: "", t50: "", t100: "", src0: "", src50: "", src100: "" },
+                { id: 2, date: "", title: "PEKERJAAN ", p0: "", p50: "", p100: "", t0: "", t50: "", t100: "", src0: "", src50: "", src100: "" },
+                { id: 3, date: "", title: "PEKERJAAN ", p0: "", p50: "", p100: "", t0: "", t50: "", t100: "", src0: "", src50: "", src100: "" },
+                { id: 4, date: "", title: "PEKERJAAN ", p0: "", p50: "", p100: "", t0: "", t50: "", t100: "", src0: "", src50: "", src100: "" },
+                { id: 5, date: "", title: "PEKERJAAN ", p0: "", p50: "", p100: "", t0: "", t50: "", t100: "", src0: "", src50: "", src100: "" }
+            ]
+        };
+
+        let historyStack = [];
+        const MAX_HISTORY = 8;
+        let activeSlot = { rowIndex: 0, progressKey: 'p0' };
+        let draggedSlot = null;
+        let saveDebounceTimer = null;
+        let tesseractWorkerPromise = null;
+        let isFabOpen = false;
+        let appInitialized = false;
+
+        function bootAppOnce() {
+            if (appInitialized) return;
+            appInitialized = true;
+            try {
+                loadFromLocalStorage();
+                syncJalurAndStaDropdown(false);
+                renderPages();
+                setupKeyboardShortcuts();
+                setupPasteListener();
+            } catch (err) {
+                console.error("Boot error:", err);
+                try {
+                    reportData.rows = [
+                        ensureRowSchema({ id: 1, date: "SENIN, 12 OKTOBER 2026", title: "PEKERJAAN ROUNDING KM 230+600B S/D KM 228+600B" }, 1),
+                        ensureRowSchema({ id: 2, date: "", title: "PEKERJAAN " }, 2),
+                        ensureRowSchema({ id: 3, date: "", title: "PEKERJAAN " }, 3),
+                        ensureRowSchema({ id: 4, date: "", title: "PEKERJAAN " }, 4),
+                        ensureRowSchema({ id: 5, date: "", title: "PEKERJAAN " }, 5)
+                    ];
+                    syncJalurAndStaDropdown(false);
+                    renderPages();
+                } catch (_) {}
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            bootAppOnce();
+            document.addEventListener('click', (e) => {
+                const container = document.getElementById('fabContainer');
+                if (isFabOpen && container && !container.contains(e.target)) {
+                    closeFabMenu();
+                }
+            });
+        });
+
+        window.addEventListener('load', () => {
+            bootAppOnce();
+        });
+
+        // ---------------- FUNGSI KAMERA WATERMARK COMBAT (TAHAP 3) ----------------
+        function populateCombatStaDropdown() {
+            const sel = document.getElementById('combatStaSelect');
+            if (!sel) return;
+            const opts = buildStaPerKmOptions(combatConfig.jalur);
+            const prev = sel.value;
+            sel.innerHTML = opts.map(o => `<option value="${escapeAttr(o.titleSuffix)}">${escapeAttr(o.label)}</option>`).join('');
+            if (prev && Array.from(sel.options).some(op => op.value === prev)) {
+                sel.value = prev;
+            }
+        }
+
+        function setCombatJalur(j) {
+            combatConfig.jalur = j === 'B' ? 'B' : 'A';
+            const btnA = document.getElementById('combatBtnJalurA');
+            const btnB = document.getElementById('combatBtnJalurB');
+            if (btnA && btnB) {
+                btnA.className = combatConfig.jalur === 'A'
+                    ? "py-2 rounded-xl text-xs font-black uppercase bg-blue-600 text-white border border-blue-400"
+                    : "py-2 rounded-xl text-xs font-black uppercase bg-slate-800 text-slate-300 border border-slate-700";
+                btnB.className = combatConfig.jalur === 'B'
+                    ? "py-2 rounded-xl text-xs font-black uppercase bg-blue-600 text-white border border-blue-400"
+                    : "py-2 rounded-xl text-xs font-black uppercase bg-slate-800 text-slate-300 border border-slate-700";
+            }
+            populateCombatStaDropdown();
+            syncCombatTitleFromPickers();
+        }
+
+        function setCombatProgress(pKey) {
+            combatConfig.progressKey = ['p0', 'p50', 'p100'].includes(pKey) ? pKey : 'p0';
+            const mapBtn = {
+                p0: document.getElementById('combatProg0'),
+                p50: document.getElementById('combatProg50'),
+                p100: document.getElementById('combatProg100')
+            };
+            Object.entries(mapBtn).forEach(([k, el]) => {
+                if (!el) return;
+                el.className = (k === combatConfig.progressKey)
+                    ? "py-2 rounded-xl text-xs font-black uppercase border transition bg-blue-600 border-blue-400 text-white"
+                    : "py-2 rounded-xl text-xs font-black uppercase border transition bg-slate-800 border-slate-700 text-slate-300";
+            });
+            updateCombatHudPreview();
+        }
+
+        function syncCombatTitleFromPickers() {
+            const job = (document.getElementById('combatJobSelect')?.value || 'PEKERJAAN ROUNDING').toUpperCase();
+            const sta = (document.getElementById('combatStaSelect')?.value || 'KM 214+600A S/D KM 215+600A').toUpperCase();
+            const combined = `${job} ${sta}`.trim();
+            combatConfig.customTitle = combined;
+            const inp = document.getElementById('combatCustomTitleInput');
+            if (inp) inp.value = combined;
+            updateCombatHudPreview();
+        }
+
+        function getCombatActiveTitle() {
+            const inpVal = (document.getElementById('combatCustomTitleInput')?.value || '').trim().toUpperCase();
+            if (inpVal) return inpVal;
+            const job = (document.getElementById('combatJobSelect')?.value || 'PEKERJAAN ROUNDING').toUpperCase();
+            const sta = (document.getElementById('combatStaSelect')?.value || 'KM 214+600A S/D KM 215+600A').toUpperCase();
+            return `${job} ${sta}`.trim();
+        }
+
+        function getCombatProgressLabel() {
+            if (combatConfig.progressKey === 'p50') return '50%';
+            if (combatConfig.progressKey === 'p100') return '100%';
+            return '0%';
+        }
+
+        function formatNowCombatStamp() {
+            const now = new Date();
+            const dateIndo = formatIndonesianFullDate(now);
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return {
+                dateIndo,
+                hhmm: `${hh}:${mm}`,
+                fullClock: `${dateIndo} • ${hh}:${mm}:${ss} WIB`
+            };
+        }
+
+        function updateCombatHudPreview() {
+            const stamp = formatNowCombatStamp();
+            const clockEl = document.getElementById('combatLiveClock');
+            const timeEl = document.getElementById('combatHudTimeText');
+            const titleEl = document.getElementById('combatHudTitleText');
+            const progBadge = document.getElementById('combatHudProgressBadge');
+            const teamBadge = document.getElementById('combatHudTeamBadge');
+            const teamVal = ((document.getElementById('combatTeamInput')?.value || combatConfig.team || 'TIM-LAPANGAN')).trim().toUpperCase();
+            combatConfig.team = teamVal;
+
+            if (clockEl) clockEl.textContent = stamp.fullClock;
+            if (timeEl) timeEl.textContent = `${stamp.dateIndo} | ${stamp.hhmm}`;
+            if (titleEl) titleEl.textContent = getCombatActiveTitle();
+            if (progBadge) progBadge.textContent = `PROGRES: ${getCombatProgressLabel()}`;
+            if (teamBadge) teamBadge.textContent = teamVal || 'TIM-LAPANGAN';
+        }
+
+        async function openCombatMode() {
+            combatConfig.isOpen = true;
+            const modal = document.getElementById('combatCameraModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+            populateCombatStaDropdown();
+            if (!combatConfig.customTitle) {
+                syncCombatTitleFromPickers();
+            } else {
+                const inp = document.getElementById('combatCustomTitleInput');
+                if (inp) inp.value = combatConfig.customTitle;
+            }
+            setCombatProgress(combatConfig.progressKey);
+            updateCombatHudPreview();
+
+            clearInterval(combatConfig.clockTimer);
+            combatConfig.clockTimer = setInterval(updateCombatHudPreview, 1000);
+
+            await startCombatCameraStream();
+        }
+
+        function closeCombatMode() {
+            combatConfig.isOpen = false;
+            clearInterval(combatConfig.clockTimer);
+            combatConfig.clockTimer = null;
+            stopCombatCameraStream();
+            const modal = document.getElementById('combatCameraModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function toggleCombatMode() {
+            if (combatConfig.isOpen) closeCombatMode();
+            else openCombatMode();
+        }
+
+        function stopCombatCameraStream() {
+            if (combatConfig.stream) {
+                combatConfig.stream.getTracks().forEach(t => t.stop());
+                combatConfig.stream = null;
+            }
+            const video = document.getElementById('combatVideoStream');
+            if (video) video.srcObject = null;
+        }
+
+        async function startCombatCameraStream() {
+            stopCombatCameraStream();
+            const noticeEl = document.getElementById('combatCamFallbackNotice');
+            const errTextEl = document.getElementById('combatCamErrorText');
+            const video = document.getElementById('combatVideoStream');
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                if (noticeEl) noticeEl.classList.remove('hidden');
+                if (errTextEl) errTextEl.textContent = "BROWSER TIDAK MENDUKUNG KAMERA LIVE. GUNAKAN TOMBOL PILIH FOTO / KAMERA HP DI BAWAH.";
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: combatConfig.facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                combatConfig.stream = stream;
+                if (video) {
+                    video.srcObject = stream;
+                    await video.play();
+                }
+                if (noticeEl) noticeEl.classList.add('hidden');
+            } catch (err) {
+                if (noticeEl) noticeEl.classList.remove('hidden');
+                if (errTextEl) {
+                    errTextEl.textContent = "IZIN KAMERA LIVE BELUM AKTIF / TIDAK TERSEDIA. GUNAKAN TOMBOL PILIH FOTO / KAMERA HP DI BAWAH.";
+                }
+            }
+        }
+
+        async function switchCombatCameraFacing() {
+            combatConfig.facingMode = combatConfig.facingMode === 'environment' ? 'user' : 'environment';
+            await startCombatCameraStream();
+        }
+
+        function burnCombatWatermarkOnCanvas(sourceCanvas, titleText, progressLabel, dateIndo, hhmm, teamName) {
+            const outW = Math.min(sourceCanvas.width, 1080);
+            const scale = outW / Math.max(1, sourceCanvas.width);
+            const outH = Math.round(sourceCanvas.height * scale);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = outW;
+            canvas.height = outH;
+            const ctx = canvas.getContext('2d', { alpha: false });
+            ctx.drawImage(sourceCanvas, 0, 0, outW, outH);
+
+            const bannerH = Math.max(76, Math.round(outH * 0.145));
+            const bannerY = outH - bannerH;
+            const padX = Math.max(12, Math.round(outW * 0.022));
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            ctx.fillRect(0, bannerY, outW, bannerH);
+
+            ctx.fillStyle = '#06b6d4';
+            ctx.fillRect(0, bannerY, outW, 4);
+
+            const line1Y = bannerY + Math.round(bannerH * 0.28);
+            const line2Y = bannerY + Math.round(bannerH * 0.57);
+            const line3Y = bannerY + Math.round(bannerH * 0.84);
+
+            const fontSizeMain = Math.max(13, Math.round(bannerH * 0.21));
+            const fontSizeSub = Math.max(11, Math.round(bannerH * 0.175));
+
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#38bdf8';
+            ctx.font = `900 ${fontSizeSub}px Inter, Arial, sans-serif`;
+            ctx.fillText(`PT GALASKA MANDIRI PERSADA • ${teamName || 'TIM-LAPANGAN'}`, padX, line1Y);
+
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#fde047';
+            ctx.fillText(`PROGRESS: ${progressLabel}`, outW - padX, line1Y);
+
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `900 ${fontSizeMain}px Inter, Arial, sans-serif`;
+            ctx.fillText((titleText || 'PEKERJAAN').slice(0, 68), padX, line2Y);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = `800 ${fontSizeSub}px Inter, Arial, sans-serif`;
+            ctx.fillText(`WAKTU: ${dateIndo} • ${hhmm} WIB`, padX, line3Y);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+            canvas.width = 0;
+            canvas.height = 0;
+            return dataUrl;
+        }
+
+        function placeCombatPhotoIntoReport(burnedDataUrl, titleText, progressKey, dateIndo, hhmm, teamName) {
+            pushHistory();
+            const normTitle = (titleText || 'PEKERJAAN').trim().toUpperCase();
+            const targetKey = ['p0', 'p50', 'p100'].includes(progressKey) ? progressKey : 'p0';
+            const timeKey = targetKey === 'p0' ? 't0' : (targetKey === 'p50' ? 't50' : 't100');
+            const srcKey = targetKey === 'p0' ? 'src0' : (targetKey === 'p50' ? 'src50' : 'src100');
+
+            let targetRowIdx = reportData.rows.findIndex(r =>
+                normalizeWorkTitleKey(r.title) === normalizeWorkTitleKey(normTitle) && !r[targetKey]
+            );
+
+            if (targetRowIdx === -1) {
+                targetRowIdx = reportData.rows.findIndex(r => {
+                    const t = (r.title || '').trim().toUpperCase();
+                    const noPhoto = !r.p0 && !r.p50 && !r.p100;
+                    return noPhoto && (!t || t === 'PEKERJAAN' || t === 'PEKERJAAN ROUNDING KM 230+600B S/D KM 228+600B');
+                });
+            }
+
+            if (targetRowIdx === -1) {
+                const nextId = reportData.rows.length > 0 ? Math.max(...reportData.rows.map(r => r.id)) + 1 : 1;
+                reportData.rows.push(ensureRowSchema({ id: nextId, date: dateIndo, title: normTitle }, nextId));
+                targetRowIdx = reportData.rows.length - 1;
+            }
+
+            const row = reportData.rows[targetRowIdx];
+            if (!row.date) row.date = dateIndo;
+            row.title = normTitle;
+            row[targetKey] = burnedDataUrl;
+            row[timeKey] = hhmm;
+            row[srcKey] = (teamName || 'COMBAT').toUpperCase().slice(0, 18);
+
+            if (targetRowIdx === 0 && dateIndo) {
+                syncWeeklyPeriodFromFirstDate(dateIndo);
+            }
+
+            activeSlot = { rowIndex: targetRowIdx, progressKey: targetKey };
+            renderPages();
+            scheduleSaveToLocalStorage();
+
+            const lastCard = document.getElementById('combatLastShotCard');
+            const lastImg = document.getElementById('combatLastShotPreview');
+            if (lastCard && lastImg) {
+                lastImg.src = burnedDataUrl;
+                lastCard.classList.remove('hidden');
+            }
+
+            showToast("WATERMARK TERSIMPAN", `${getCombatProgressLabel()} • ${normTitle}`, "success");
+        }
+
+        async function captureCombatPhoto() {
+            const video = document.getElementById('combatVideoStream');
+            if (!video || !combatConfig.stream || video.readyState < 2) {
+                const galleryInput = document.getElementById('combatGalleryInput');
+                if (galleryInput) galleryInput.click();
+                return;
+            }
+
+            const vw = video.videoWidth || 1280;
+            const vh = video.videoHeight || 720;
+            const snapCanvas = document.createElement('canvas');
+            snapCanvas.width = vw;
+            snapCanvas.height = vh;
+            const snapCtx = snapCanvas.getContext('2d', { alpha: false });
+            snapCtx.drawImage(video, 0, 0, vw, vh);
+
+            const stamp = formatNowCombatStamp();
+            const titleText = getCombatActiveTitle();
+            const progressLabel = getCombatProgressLabel();
+            const teamName = ((document.getElementById('combatTeamInput')?.value || combatConfig.team || 'TIM-LAPANGAN')).trim().toUpperCase();
+
+            const burnedUrl = burnCombatWatermarkOnCanvas(snapCanvas, titleText, progressLabel, stamp.dateIndo, stamp.hhmm, teamName);
+            snapCanvas.width = 0;
+            snapCanvas.height = 0;
+
+            placeCombatPhotoIntoReport(burnedUrl, titleText, combatConfig.progressKey, stamp.dateIndo, stamp.hhmm, teamName);
+        }
+
+        async function handleCombatGalleryFile(event) {
+            const file = event.target?.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+
+            const stamp = formatNowCombatStamp();
+            const titleText = getCombatActiveTitle();
+            const progressLabel = getCombatProgressLabel();
+            const teamName = ((document.getElementById('combatTeamInput')?.value || combatConfig.team || 'TIM-LAPANGAN')).trim().toUpperCase();
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = img.naturalWidth || img.width;
+                    tempCanvas.height = img.naturalHeight || img.height;
+                    const tCtx = tempCanvas.getContext('2d', { alpha: false });
+                    tCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                    const burnedUrl = burnCombatWatermarkOnCanvas(tempCanvas, titleText, progressLabel, stamp.dateIndo, stamp.hhmm, teamName);
+                    tempCanvas.width = 0;
+                    tempCanvas.height = 0;
+
+                    placeCombatPhotoIntoReport(burnedUrl, titleText, combatConfig.progressKey, stamp.dateIndo, stamp.hhmm, teamName);
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ---------------- FUNGSI UTAMA LAPORAN & MULTI-TIM ----------------
+        function ensureRowSchema(r, fallbackId = 1) {
+            const src = r || {};
+            return {
+                id: src.id || fallbackId,
+                date: String(src.date || "").toUpperCase(),
+                title: String(src.title !== undefined ? src.title : "PEKERJAAN ").toUpperCase(),
+                p0: src.p0 || "",
+                p50: src.p50 || "",
+                p100: src.p100 || "",
+                t0: src.t0 || "",
+                t50: src.t50 || "",
+                t100: src.t100 || "",
+                src0: src.src0 || "",
+                src50: src.src50 || "",
+                src100: src.src100 || ""
+            };
+        }
+
+        function getRowCompletenessInfo(row) {
+            const has0 = Boolean(row.p0);
+            const has50 = Boolean(row.p50);
+            const has100 = Boolean(row.p100);
+            const filledCount = (has0 ? 1 : 0) + (has50 ? 1 : 0) + (has100 ? 1 : 0);
+            const cleanTitle = (row.title || "").trim();
+            const hasAnyContent = filledCount > 0 || (cleanTitle.length > 0 && cleanTitle !== "PEKERJAAN") || Boolean((row.date || "").trim());
+
+            const missing = [];
+            if (!has0) missing.push("0%");
+            if (!has50) missing.push("50%");
+            if (!has100) missing.push("100% QC");
+
+            return {
+                has0,
+                has50,
+                has100,
+                filledCount,
+                hasAnyContent,
+                isComplete: filledCount === 3,
+                isIncomplete: hasAnyContent && filledCount < 3,
+                missingLabel: missing.join(", ")
+            };
+        }
+
+        function setRowCompletenessFilter(mode) {
+            rowCompletenessFilter = mode;
+            renderPages();
+        }
+
+        function updateCompletenessFilterCounters() {
+            let incompleteCount = 0;
+            let completeCount = 0;
+
+            reportData.rows.forEach(r => {
+                const info = getRowCompletenessInfo(r);
+                if (info.hasAnyContent) {
+                    if (info.isComplete) completeCount++;
+                    else incompleteCount++;
+                }
+            });
+
+            const elAll = document.getElementById('countAllRows');
+            const elInc = document.getElementById('countIncompleteRows');
+            const elCom = document.getElementById('countCompleteRows');
+            if (elAll) elAll.textContent = String(reportData.rows.length);
+            if (elInc) elInc.textContent = String(incompleteCount);
+            if (elCom) elCom.textContent = String(completeCount);
+
+            const btnAll = document.getElementById('filterAllBtn');
+            const btnInc = document.getElementById('filterIncompleteBtn');
+            const btnCom = document.getElementById('filterCompleteBtn');
+
+            if (btnAll) {
+                btnAll.className = rowCompletenessFilter === 'ALL'
+                    ? "px-2.5 py-1 rounded-md border border-slate-900 bg-slate-900 text-white transition"
+                    : "px-2.5 py-1 rounded-md border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 transition";
+            }
+            if (btnInc) {
+                btnInc.className = rowCompletenessFilter === 'INCOMPLETE'
+                    ? "px-2.5 py-1 rounded-md border border-amber-600 bg-amber-600 text-white transition"
+                    : "px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition";
+            }
+            if (btnCom) {
+                btnCom.className = rowCompletenessFilter === 'COMPLETE'
+                    ? "px-2.5 py-1 rounded-md border border-emerald-600 bg-emerald-600 text-white transition"
+                    : "px-2.5 py-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition";
+            }
+        }
+
+        function normalizeDataUrlToLightJpeg(dataUrl, maxWidth = 920, quality = 0.76) {
+            return new Promise((resolve) => {
+                if (!dataUrl || typeof dataUrl !== 'string') return resolve("");
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const w = img.naturalWidth || img.width;
+                        const h = img.naturalHeight || img.height;
+                        if (w <= maxWidth && dataUrl.startsWith('data:image/jpeg')) {
+                            return resolve(dataUrl);
+                        }
+                        const scale = w > maxWidth ? (maxWidth / w) : 1;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(w * scale);
+                        canvas.height = Math.round(h * scale);
+                        const ctx = canvas.getContext('2d', { alpha: false });
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const out = canvas.toDataURL('image/jpeg', quality);
+                        canvas.width = 0;
+                        canvas.height = 0;
+                        resolve(out);
+                    } catch (_) {
+                        resolve(dataUrl);
+                    }
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
+        async function mergeTeamJsonFiles(event) {
+            const files = Array.from(event.target?.files || []);
+            event.target.value = "";
+            if (!files.length) return;
+
+            const modal = document.getElementById('batchUploadModal');
+            const statusEl = document.getElementById('batchProgressStatus');
+            const barEl = document.getElementById('batchProgressBar');
+
+            if (modal) modal.classList.remove('hidden');
+            if (statusEl) statusEl.textContent = `MEMBACA ${files.length} PAKET SETORAN TIM...`;
+            if (barEl) barEl.style.width = `15%`;
+            pushHistory();
+
+            try {
+                let mergedPhotoCount = 0;
+                const incomingRows = [];
+
+                for (let fIdx = 0; fIdx < files.length; fIdx++) {
+                    const file = files[fIdx];
+                    const teamLabel = file.name.replace(/\.json$/i, "").toUpperCase().slice(0, 18);
+                    const rawText = await file.text();
+                    const parsed = JSON.parse(rawText);
+
+                    if (!parsed || !Array.isArray(parsed.rows)) continue;
+
+                    for (const rawRow of parsed.rows) {
+                        const row = ensureRowSchema(rawRow);
+                        const hasPhotos = Boolean(row.p0 || row.p50 || row.p100);
+                        const cleanTitle = (row.title || "").trim();
+                        const hasTitle = cleanTitle.length > 0 && cleanTitle !== "PEKERJAAN";
+                        if (!hasPhotos && !hasTitle && !row.date) continue;
+
+                        if (row.p0) {
+                            row.p0 = await normalizeDataUrlToLightJpeg(row.p0, 920, 0.76);
+                            if (!row.src0) row.src0 = teamLabel;
+                            mergedPhotoCount++;
+                        }
+                        if (row.p50) {
+                            row.p50 = await normalizeDataUrlToLightJpeg(row.p50, 920, 0.76);
+                            if (!row.src50) row.src50 = teamLabel;
+                            mergedPhotoCount++;
+                        }
+                        if (row.p100) {
+                            row.p100 = await normalizeDataUrlToLightJpeg(row.p100, 920, 0.76);
+                            if (!row.src100) row.src100 = teamLabel;
+                            mergedPhotoCount++;
+                        }
+
+                        incomingRows.push(row);
+                    }
+
+                    const pct = 15 + Math.round(((fIdx + 1) / files.length) * 75);
+                    if (statusEl) statusEl.textContent = `MENYATUKAN PAKET ${fIdx + 1} / ${files.length}...`;
+                    if (barEl) barEl.style.width = `${pct}%`;
+                }
+
+                if (!incomingRows.length) {
+                    showToast("TIDAK ADA DATA", "FILE SETORAN TIM KOSONG ATAU FORMAT TIDAK SESUAI.", "info");
+                    return;
+                }
+
+                reportData.rows = [...reportData.rows, ...incomingRows];
+                consolidateRowsByWorkTitle(0);
+
+                if (reportData.rows[0]?.date) {
+                    syncWeeklyPeriodFromFirstDate(reportData.rows[0].date);
+                }
+
+                activeSlot = { rowIndex: 0, progressKey: 'p0' };
+                renderPages();
+                scheduleSaveToLocalStorage();
+                showToast("SETORAN TIM DIGABUNG", `${mergedPhotoCount} FOTO DARI ${files.length} PAKET TIM BERHASIL MENYATU!`, "success");
+            } catch (err) {
+                console.error(err);
+                showToast("GAGAL GABUNG SETORAN", "PASTIKAN FILE BERUPA JSON HASIL SAVE DARI TIM LAPANGAN.", "error");
+            } finally {
+                if (modal) modal.classList.add('hidden');
+            }
+        }
+
+        function buildStaPerKmOptions(jalur) {
+            const options = [];
+            if (jalur === 'A') {
+                for (let km = 214; km < 249; km++) {
+                    const startSta = `${km}+600A`;
+                    const endSta = `${km + 1}+600A`;
+                    options.push({
+                        label: `${startSta} - ${endSta}`,
+                        titleSuffix: `KM ${startSta} S/D KM ${endSta}`
+                    });
+                }
+            } else {
+                for (let km = 249; km > 214; km--) {
+                    const startSta = `${km}+600B`;
+                    const endSta = `${km - 1}+600B`;
+                    options.push({
+                        label: `${startSta} - ${endSta}`,
+                        titleSuffix: `KM ${startSta} S/D KM ${endSta}`
+                    });
+                }
+            }
+            return options;
+        }
+
+        function syncJalurAndStaDropdown(keepCurrentSelection = false) {
+            const btnA = document.getElementById('btnJalurA');
+            const btnB = document.getElementById('btnJalurB');
+            const staSelect = document.getElementById('pickerStaRange');
+            const prevVal = keepCurrentSelection && staSelect ? staSelect.value : '';
+
+            if (btnA && btnB) {
+                if (selectedJalur === 'A') {
+                    btnA.className = "px-3 py-1.5 text-[11px] font-black uppercase transition bg-blue-600 text-white";
+                    btnB.className = "px-3 py-1.5 text-[11px] font-black uppercase transition bg-slate-100 text-slate-700 hover:bg-slate-200";
+                } else {
+                    btnB.className = "px-3 py-1.5 text-[11px] font-black uppercase transition bg-blue-600 text-white";
+                    btnA.className = "px-3 py-1.5 text-[11px] font-black uppercase transition bg-slate-100 text-slate-700 hover:bg-slate-200";
+                }
+            }
+
+            if (staSelect) {
+                const opts = buildStaPerKmOptions(selectedJalur);
+                staSelect.innerHTML = `<option value="">-- PILIH STA PER 1KM (${selectedJalur}) --</option>` +
+                    opts.map(o => `<option value="${escapeAttr(o.titleSuffix)}">${escapeAttr(o.label)}</option>`).join('');
+                if (prevVal && Array.from(staSelect.options).some(op => op.value === prevVal)) {
+                    staSelect.value = prevVal;
+                }
+            }
+        }
+
+        function selectJalur(jalur) {
+            selectedJalur = jalur === 'B' ? 'B' : 'A';
+            syncJalurAndStaDropdown(false);
+            const jenisVal = document.getElementById('pickerJenisPekerjaan')?.value || '';
+            if (jenisVal) {
+                applyQuickTitlePicker(false);
+            }
+        }
+
+        function applyQuickTitlePicker(showFeedback = false) {
+            const jenisEl = document.getElementById('pickerJenisPekerjaan');
+            const staEl = document.getElementById('pickerStaRange');
+            const jenis = (jenisEl?.value || '').trim().toUpperCase();
+            const staSuffix = (staEl?.value || '').trim().toUpperCase();
+
+            if (!jenis && !staSuffix) {
+                if (showFeedback) showToast("PILIH DATA", "PILIH JENIS PEKERJAAN ATAU RENTANG STA DULU.", "info");
+                return;
+            }
+
+            const rowIdx = Math.max(0, Math.min(activeSlot.rowIndex, reportData.rows.length - 1));
+            const row = reportData.rows[rowIdx];
+            if (!row) return;
+
+            let combinedTitle = (row.title || 'PEKERJAAN ').trim().toUpperCase();
+            if (jenis && staSuffix) {
+                combinedTitle = `${jenis} ${staSuffix}`;
+            } else if (jenis) {
+                const kmMatch = combinedTitle.match(/KM\s+\d+\+\d+[AB]\s+S\/D\s+KM\s+\d+\+\d+[AB]/i);
+                combinedTitle = kmMatch ? `${jenis} ${kmMatch[0].toUpperCase()}` : jenis;
+            } else if (staSuffix) {
+                const baseJenis = combinedTitle.replace(/KM\s+\d+\+\d+[AB]\s+S\/D\s+KM\s+\d+\+\d+[AB]/i, '').trim() || 'PEKERJAAN';
+                const prefixedJenis = baseJenis.startsWith('PEKERJAAN') ? baseJenis : `PEKERJAAN ${baseJenis}`;
+                combinedTitle = `${prefixedJenis} ${staSuffix}`;
+            }
+
+            pushHistory();
+            row.title = combinedTitle;
+            consolidateRowsByWorkTitle(rowIdx);
+            renderPages();
+            scheduleSaveToLocalStorage();
+            if (showFeedback) {
+                showToast("JUDUL DIPASANG", combinedTitle, "success");
+            }
+        }
+
+        function normalizeWorkTitleKey(title) {
+            return (title || "")
+                .toUpperCase()
+                .replace(/S\/D/g, "SD")
+                .replace(/[\+\-\.\,\:\;\s]+/g, "")
+                .replace(/O/g, "0")
+                .trim();
+        }
+
+        function timeToMinutes(timeStr) {
+            if (!timeStr) return Number.MAX_SAFE_INTEGER;
+            const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})$/);
+            if (!m) return Number.MAX_SAFE_INTEGER;
+            const hh = parseInt(m[1], 10);
+            const mm = parseInt(m[2], 10);
+            if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return Number.MAX_SAFE_INTEGER;
+            return (hh * 60) + mm;
+        }
+
+        function consolidateRowsByWorkTitle(preferredRowIndex = null) {
+            const nonEmptyRows = [];
+            const blankTemplateRows = [];
+
+            reportData.rows.forEach((rawR, idx) => {
+                const r = ensureRowSchema(rawR, idx + 1);
+                const cleanTitle = (r.title || "").trim().toUpperCase();
+                const hasPhotos = Boolean(r.p0 || r.p50 || r.p100);
+                const hasMeaningfulTitle = cleanTitle.length > 0 && cleanTitle !== "PEKERJAAN";
+                const hasDate = Boolean((r.date || "").trim());
+
+                if (hasPhotos || hasMeaningfulTitle || hasDate) {
+                    nonEmptyRows.push({
+                        origIdx: idx,
+                        date: (r.date || "").toUpperCase(),
+                        title: cleanTitle || "PEKERJAAN",
+                        entries: [
+                            r.p0 ? { img: r.p0, time: r.t0 || "", src: r.src0 || "", slotHint: "p0" } : null,
+                            r.p50 ? { img: r.p50, time: r.t50 || "", src: r.src50 || "", slotHint: "p50" } : null,
+                            r.p100 ? { img: r.p100, time: r.t100 || "", src: r.src100 || "", slotHint: "p100" } : null
+                        ].filter(Boolean)
+                    });
+                } else {
+                    blankTemplateRows.push(r);
+                }
+            });
+
+            if (nonEmptyRows.length === 0) return;
+
+            const groupedMap = new Map();
+            for (const item of nonEmptyRows) {
+                const key = `${normalizeWorkTitleKey(item.title)}||${(item.date || "").replace(/[^A-Z0-9]/g, "")}`;
+                if (!groupedMap.has(key)) {
+                    groupedMap.set(key, {
+                        title: item.title,
+                        date: item.date,
+                        entries: [],
+                        firstOrigIdx: item.origIdx
+                    });
+                }
+                const grp = groupedMap.get(key);
+                if (item.title.length > grp.title.length && item.title !== "PEKERJAAN LAINNYA") {
+                    grp.title = item.title;
+                }
+                if (!grp.date && item.date) {
+                    grp.date = item.date;
+                }
+                grp.entries.push(...item.entries);
+                if (item.origIdx < grp.firstOrigIdx) grp.firstOrigIdx = item.origIdx;
+            }
+
+            const rebuiltRows = [];
+            let nextId = 1;
+            let mappedPreferredRow = 0;
+
+            for (const grp of groupedMap.values()) {
+                const entriesWithTime = grp.entries.filter(e => e.time);
+                if (entriesWithTime.length > 1) {
+                    grp.entries.sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+                }
+
+                const startRowIdxForGroup = rebuiltRows.length;
+                let curRow = ensureRowSchema({
+                    id: nextId++,
+                    date: grp.date,
+                    title: grp.title
+                }, nextId);
+
+                const slotOrder = ['p0', 'p50', 'p100'];
+                const timeOrder = ['t0', 't50', 't100'];
+                const srcOrder = ['src0', 'src50', 'src100'];
+
+                for (const entry of grp.entries) {
+                    const hintIdx = entry.slotHint ? slotOrder.indexOf(entry.slotHint) : -1;
+                    let placed = false;
+
+                    if (hintIdx >= 0 && !curRow[slotOrder[hintIdx]]) {
+                        curRow[slotOrder[hintIdx]] = entry.img;
+                        curRow[timeOrder[hintIdx]] = entry.time || "";
+                        curRow[srcOrder[hintIdx]] = entry.src || "";
+                        placed = true;
+                    } else {
+                        for (let s = 0; s < 3; s++) {
+                            if (!curRow[slotOrder[s]]) {
+                                curRow[slotOrder[s]] = entry.img;
+                                curRow[timeOrder[s]] = entry.time || "";
+                                curRow[srcOrder[s]] = entry.src || "";
+                                placed = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!placed) {
+                        rebuiltRows.push(curRow);
+                        const targetAfterFull = hintIdx >= 0 ? hintIdx : 0;
+                        curRow = ensureRowSchema({
+                            id: nextId++,
+                            date: grp.date,
+                            title: grp.title
+                        }, nextId);
+                        curRow[slotOrder[targetAfterFull]] = entry.img;
+                        curRow[timeOrder[targetAfterFull]] = entry.time || "";
+                        curRow[srcOrder[targetAfterFull]] = entry.src || "";
+                    }
+                }
+
+                rebuiltRows.push(curRow);
+
+                if (preferredRowIndex !== null && grp.firstOrigIdx === preferredRowIndex) {
+                    mappedPreferredRow = startRowIdxForGroup;
+                }
+            }
+
+            while (rebuiltRows.length < Math.max(5, blankTemplateRows.length)) {
+                rebuiltRows.push(ensureRowSchema({ id: nextId++, date: "", title: "PEKERJAAN " }, nextId));
+            }
+
+            reportData.rows = rebuiltRows;
+            if (preferredRowIndex !== null) {
+                activeSlot.rowIndex = Math.min(mappedPreferredRow, reportData.rows.length - 1);
+            }
+        }
+
+        function toggleFabMenu(evt) {
+            if (evt) evt.stopPropagation();
+            isFabOpen = !isFabOpen;
+            syncFabMenuUI();
+        }
+
+        function closeFabMenu() {
+            if (!isFabOpen) return;
+            isFabOpen = false;
+            syncFabMenuUI();
+        }
+
+        function syncFabMenuUI() {
+            const menu = document.getElementById('fabMenu');
+            const iconOpen = document.getElementById('fabIconOpen');
+            const iconClose = document.getElementById('fabIconClose');
+            const toggleBtn = document.getElementById('fabToggleBtn');
+            if (!menu) return;
+
+            if (isFabOpen) {
+                menu.classList.remove('scale-0', 'opacity-0', 'pointer-events-none');
+                menu.classList.add('scale-100', 'opacity-100', 'pointer-events-auto');
+                if (iconOpen) iconOpen.classList.add('hidden');
+                if (iconClose) iconClose.classList.remove('hidden');
+                if (toggleBtn) toggleBtn.classList.add('bg-blue-600');
+            } else {
+                menu.classList.add('scale-0', 'opacity-0', 'pointer-events-none');
+                menu.classList.remove('scale-100', 'opacity-100', 'pointer-events-auto');
+                if (iconOpen) iconOpen.classList.remove('hidden');
+                if (iconClose) iconClose.classList.add('hidden');
+                if (toggleBtn) toggleBtn.classList.remove('bg-blue-600');
+            }
+        }
+
+        const BULAN_INDO = [
+            "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
+            "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
+        ];
+        const HARI_INDO = ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
+
+        const MONTH_MAP = {
+            JAN: 0, JANUARI: 0, JANUARY: 0,
+            FEB: 1, FEBRUARI: 1, FEBRUARY: 1,
+            MAR: 2, MARET: 2, MARCH: 2,
+            APR: 3, APRIL: 3,
+            MEI: 4, MAY: 4,
+            JUN: 5, JUNI: 5, JUNE: 5,
+            JUL: 6, JULI: 6, JULY: 6,
+            AGU: 7, AGUSTUS: 7, AUG: 7, AUGUST: 7,
+            SEP: 8, SEPT: 8, SEPTEMBER: 8,
+            OKT: 9, OKTOBER: 9, OCT: 9, OCTOBER: 9,
+            NOV: 10, NOVEMBER: 10,
+            DES: 11, DESEMBER: 11, DEC: 11, DECEMBER: 11
+        };
+
+        function formatIndonesianFullDate(dateObj) {
+            if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+            const dayName = HARI_INDO[dateObj.getDay()];
+            const dayNum = dateObj.getDate();
+            const monthName = BULAN_INDO[dateObj.getMonth()];
+            const yearNum = dateObj.getFullYear();
+            return `${dayName}, ${dayNum} ${monthName} ${yearNum}`;
+        }
+
+        function formatShortIndoDate(dateObj) {
+            if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+            return `${dateObj.getDate()} ${BULAN_INDO[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+        }
+
+        function parseDateFlexible(str) {
+            if (!str) return null;
+            const clean = str.toUpperCase().replace(/[^A-Z0-9\s\/\-\.]/g, " ").trim();
+
+            let m = clean.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+            if (m) {
+                const d = parseInt(m[1], 10);
+                const mo = parseInt(m[2], 10) - 1;
+                const y = parseInt(m[3], 10);
+                if (mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+                    return new Date(y, mo, d);
+                }
+            }
+
+            m = clean.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+            if (m) {
+                const y = parseInt(m[1], 10);
+                const mo = parseInt(m[2], 10) - 1;
+                const d = parseInt(m[3], 10);
+                if (mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+                    return new Date(y, mo, d);
+                }
+            }
+
+            m = clean.match(/(\d{1,2})\s+([A-Z]{3,12})\s+(\d{4})/);
+            if (m && MONTH_MAP.hasOwnProperty(m[2])) {
+                const d = parseInt(m[1], 10);
+                const mo = MONTH_MAP[m[2]];
+                const y = parseInt(m[3], 10);
+                return new Date(y, mo, d);
+            }
+
+            return null;
+        }
+
+        function normalizeDateToIndoText(rawDateStr) {
+            const parsed = parseDateFlexible(rawDateStr);
+            if (parsed) return formatIndonesianFullDate(parsed);
+            return (rawDateStr || "").toUpperCase().trim();
+        }
+
+        function syncWeeklyPeriodFromFirstDate(firstDateStr) {
+            const startDate = parseDateFlexible(firstDateStr);
+            if (!startDate) return;
+
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+
+            const endFullStr = formatShortIndoDate(endDate);
+            const periodeStr = (startDate.getMonth() === endDate.getMonth() && startDate.getFullYear() === endDate.getFullYear())
+                ? `${startDate.getDate()} - ${endFullStr}`
+                : `${startDate.getDate()} ${BULAN_INDO[startDate.getMonth()]} - ${endFullStr}`;
+
+            reportData.headerPeriode = periodeStr;
+            reportData.endDateFull = endFullStr;
+            reportData.signRightLocationDate = `CIREBON, ${endFullStr}`;
+        }
+
+        function pushHistory() {
+            const snapshot = JSON.stringify({
+                headerPeriode: reportData.headerPeriode,
+                endDateFull: reportData.endDateFull,
+                headerLokasi: reportData.headerLokasi,
+                headerMinggu: reportData.headerMinggu,
+                coverUseCyan: reportData.coverUseCyan,
+                signLeftTitle: reportData.signLeftTitle,
+                signLeftCompany: reportData.signLeftCompany,
+                signLeftName: reportData.signLeftName,
+                signLeftRole: reportData.signLeftRole,
+                signRightLocationDate: reportData.signRightLocationDate,
+                signRightTitle: reportData.signRightTitle,
+                signRightCompany: reportData.signRightCompany,
+                signRightName: reportData.signRightName,
+                signRightRole: reportData.signRightRole,
+                rows: reportData.rows
+            });
+            historyStack.push(snapshot);
+            if (historyStack.length > MAX_HISTORY) historyStack.shift();
+        }
+
+        function undoAction() {
+            if (!historyStack.length) {
+                showToast("INFO", "TIDAK ADA RIWAYAT UNDO.", "info");
+                return;
+            }
+            const prev = JSON.parse(historyStack.pop());
+            Object.assign(reportData, prev);
+            renderPages();
+            scheduleSaveToLocalStorage();
+            showToast("UNDO BERHASIL", "PERUBAHAN TERAKHIR DIBATALKAN.", "success");
+        }
+
+        function scheduleSaveToLocalStorage() {
+            if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = setTimeout(() => {
+                saveToLocalStorage();
+            }, 400);
+        }
+
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('galaska_doc_report_v5', JSON.stringify(reportData));
+            } catch (e) {}
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const raw = localStorage.getItem('galaska_doc_report_v5');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+                        parsed.rows = parsed.rows.map((r, i) => ensureRowSchema(r, i + 1));
+                        Object.assign(reportData, parsed);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function toggleCoverTheme() {
+            pushHistory();
+            reportData.coverUseCyan = !reportData.coverUseCyan;
+            renderPages();
+            scheduleSaveToLocalStorage();
+        }
+
+        function updateHeaderField(field, value) {
+            const upperVal = (value || "").toUpperCase();
+            reportData[field] = upperVal;
+
+            if (field === 'headerPeriode') {
+                const parts = upperVal.split('-');
+                if (parts.length >= 2) {
+                    const endPart = parts[parts.length - 1].trim();
+                    if (endPart) {
+                        reportData.endDateFull = endPart;
+                        reportData.signRightLocationDate = `CIREBON, ${endPart}`;
+                    }
+                }
+            }
+
+            document.querySelectorAll(`[data-bind-field="${field}"]`).forEach(el => {
+                if (el !== document.activeElement) el.value = reportData[field];
+            });
+            document.querySelectorAll(`[data-bind-field="signRightLocationDate"]`).forEach(el => {
+                if (el !== document.activeElement) el.value = reportData.signRightLocationDate;
+            });
+
+            scheduleSaveToLocalStorage();
+        }
+
+        function updateRowField(rowIndex, field, value) {
+            if (!reportData.rows[rowIndex]) return;
+            let cleanVal = (value || "").toUpperCase();
+            if (field === 'date') {
+                cleanVal = normalizeDateToIndoText(cleanVal);
+                if (rowIndex === 0 && cleanVal) {
+                    syncWeeklyPeriodFromFirstDate(cleanVal);
+                    document.querySelectorAll(`[data-bind-field="headerPeriode"]`).forEach(el => el.value = reportData.headerPeriode);
+                    document.querySelectorAll(`[data-bind-field="signRightLocationDate"]`).forEach(el => el.value = reportData.signRightLocationDate);
+                }
+            }
+            reportData.rows[rowIndex][field] = cleanVal;
+            updateCompletenessFilterCounters();
+            scheduleSaveToLocalStorage();
+        }
+
+        function updateSlotTimeManual(rowIndex, progressKey, newTimeVal, evt) {
+            if (evt) evt.stopPropagation();
+            const row = reportData.rows[rowIndex];
+            if (!row) return;
+            const timeKey = progressKey === 'p0' ? 't0' : (progressKey === 'p50' ? 't50' : 't100');
+            const cleaned = (newTimeVal || "").replace(/[^0-9:]/g, "").slice(0, 5);
+            row[timeKey] = cleaned;
+
+            if (/^\d{1,2}:\d{2}$/.test(cleaned)) {
+                const items = [
+                    { img: row.p0, time: row.t0 || "", src: row.src0 || "" },
+                    { img: row.p50, time: row.t50 || "", src: row.src50 || "" },
+                    { img: row.p100, time: row.t100 || "", src: row.src100 || "" }
+                ].filter(it => Boolean(it.img));
+
+                const timedCount = items.filter(it => /^\d{1,2}:\d{2}$/.test(it.time)).length;
+                if (timedCount >= 2) {
+                    items.sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+                    const slots = ['p0', 'p50', 'p100'];
+                    const tSlots = ['t0', 't50', 't100'];
+                    const sSlots = ['src0', 'src50', 'src100'];
+                    slots.forEach((s, idx) => {
+                        row[s] = items[idx]?.img || "";
+                        row[tSlots[idx]] = items[idx]?.time || "";
+                        row[sSlots[idx]] = items[idx]?.src || "";
+                    });
+                    renderPages();
+                }
+            }
+            scheduleSaveToLocalStorage();
+        }
+
+        function addNewRow() {
+            pushHistory();
+            const nextId = reportData.rows.length > 0 ? Math.max(...reportData.rows.map(r => r.id)) + 1 : 1;
+            reportData.rows.push(ensureRowSchema({ id: nextId, date: "", title: "PEKERJAAN " }, nextId));
+            activeSlot = { rowIndex: reportData.rows.length - 1, progressKey: 'p0' };
+            renderPages();
+            scheduleSaveToLocalStorage();
+            showToast("BARIS DITAMBAHKAN", `BARIS ${reportData.rows.length} SIAP DIISI.`, "success");
+        }
+
+        function deleteRow(rowIndex) {
+            if (reportData.rows.length <= 1) {
+                showToast("PERINGATAN", "MINIMAL HARUS ADA 1 BARIS PEKERJAAN.", "info");
+                return;
+            }
+            pushHistory();
+            reportData.rows.splice(rowIndex, 1);
+            if (activeSlot.rowIndex >= reportData.rows.length) {
+                activeSlot.rowIndex = reportData.rows.length - 1;
+            }
+            renderPages();
+            scheduleSaveToLocalStorage();
+            showToast("BARIS DIHAPUS", "BARIS PEKERJAAN BERHASIL DIHAPUS.", "success");
+        }
+
+        function clearPhotoSlot(rowIndex, progressKey, evt) {
+            if (evt) evt.stopPropagation();
+            if (!reportData.rows[rowIndex]) return;
+            pushHistory();
+            reportData.rows[rowIndex][progressKey] = "";
+            const timeKey = progressKey === 'p0' ? 't0' : (progressKey === 'p50' ? 't50' : 't100');
+            const srcKey = progressKey === 'p0' ? 'src0' : (progressKey === 'p50' ? 'src50' : 'src100');
+            reportData.rows[rowIndex][timeKey] = "";
+            reportData.rows[rowIndex][srcKey] = "";
+            setActiveSlot(rowIndex, progressKey);
+            renderPages();
+            scheduleSaveToLocalStorage();
+        }
+
+        function swapPhotoSlots(fromRow, fromKey, toRow, toKey) {
+            if (fromRow === toRow && fromKey === toKey) return;
+            if (!reportData.rows[fromRow] || !reportData.rows[toRow]) return;
+
+            const fromTimeKey = fromKey === 'p0' ? 't0' : (fromKey === 'p50' ? 't50' : 't100');
+            const toTimeKey = toKey === 'p0' ? 't0' : (toKey === 'p50' ? 't50' : 't100');
+            const fromSrcKey = fromKey === 'p0' ? 'src0' : (fromKey === 'p50' ? 'src50' : 'src100');
+            const toSrcKey = toKey === 'p0' ? 'src0' : (toKey === 'p50' ? 'src50' : 'src100');
+
+            pushHistory();
+            const tempImg = reportData.rows[fromRow][fromKey];
+            reportData.rows[fromRow][fromKey] = reportData.rows[toRow][toKey];
+            reportData.rows[toRow][toKey] = tempImg;
+
+            const tempTime = reportData.rows[fromRow][fromTimeKey] || "";
+            reportData.rows[fromRow][fromTimeKey] = reportData.rows[toRow][toTimeKey] || "";
+            reportData.rows[toRow][toTimeKey] = tempTime;
+
+            const tempSrc = reportData.rows[fromRow][fromSrcKey] || "";
+            reportData.rows[fromRow][fromSrcKey] = reportData.rows[toRow][toSrcKey] || "";
+            reportData.rows[toRow][toSrcKey] = tempSrc;
+
+            setActiveSlot(toRow, toKey);
+            renderPages();
+            scheduleSaveToLocalStorage();
+            showToast("FOTO DIPINDAHKAN", "POSISI FOTO BERHASIL DITUKAR / DIGESER.", "success");
+        }
+
+        function handleSlotDragStart(rowIndex, progressKey, evt) {
+            if (!reportData.rows[rowIndex]?.[progressKey]) {
+                evt.preventDefault();
+                return;
+            }
+            draggedSlot = { rowIndex, progressKey };
+            evt.dataTransfer.effectAllowed = 'move';
+            try {
+                evt.dataTransfer.setData('text/plain', `${rowIndex}:${progressKey}`);
+            } catch (_) {}
+            const cell = evt.currentTarget;
+            if (cell) cell.classList.add('opacity-50');
+        }
+
+        function handleSlotDragOver(rowIndex, progressKey, evt) {
+            if (!draggedSlot) return;
+            evt.preventDefault();
+            evt.dataTransfer.dropEffect = 'move';
+            const cell = evt.currentTarget;
+            if (cell && !(draggedSlot.rowIndex === rowIndex && draggedSlot.progressKey === progressKey)) {
+                cell.classList.add('ring-2', 'ring-emerald-500', 'ring-inset', 'bg-emerald-50/70');
+            }
+        }
+
+        function handleSlotDragLeave(evt) {
+            const cell = evt.currentTarget;
+            if (cell) {
+                cell.classList.remove('ring-2', 'ring-emerald-500', 'ring-inset', 'bg-emerald-50/70');
+            }
+        }
+
+        function handleSlotDrop(toRow, toKey, evt) {
+            evt.preventDefault();
+            const cell = evt.currentTarget;
+            if (cell) {
+                cell.classList.remove('ring-2', 'ring-emerald-500', 'ring-inset', 'bg-emerald-50/70');
+            }
+            if (!draggedSlot) return;
+            const { rowIndex: fromRow, progressKey: fromKey } = draggedSlot;
+            draggedSlot = null;
+            swapPhotoSlots(fromRow, fromKey, toRow, toKey);
+        }
+
+        function handleSlotDragEnd(evt) {
+            const cell = evt.currentTarget;
+            if (cell) cell.classList.remove('opacity-50');
+            document.querySelectorAll('[data-slot-cell]').forEach(el => {
+                el.classList.remove('opacity-50', 'ring-2', 'ring-emerald-500', 'ring-inset', 'bg-emerald-50/70');
+            });
+            draggedSlot = null;
+        }
+
+        function setActiveSlot(rowIndex, progressKey) {
+            activeSlot = { rowIndex, progressKey };
+            updateSelectionHighlights();
+        }
+
+        function updateSelectionHighlights() {
+            const labelMap = { p0: '0%', p50: '50%', p100: '100%' };
+            const indicator = document.getElementById('activeSlotIndicator');
+            if (indicator) {
+                indicator.textContent = `SLOT AKTIF: BARIS ${activeSlot.rowIndex + 1} - ${labelMap[activeSlot.progressKey]}`;
+            }
+
+            document.querySelectorAll('[data-slot-cell]').forEach(cell => {
+                const r = parseInt(cell.getAttribute('data-row'), 10);
+                const k = cell.getAttribute('data-key');
+                if (r === activeSlot.rowIndex && k === activeSlot.progressKey) {
+                    cell.classList.add('ring-2', 'ring-blue-600', 'ring-inset', 'bg-blue-50/40');
+                } else {
+                    cell.classList.remove('ring-2', 'ring-blue-600', 'ring-inset', 'bg-blue-50/40');
+                }
+            });
+        }
+
+        function buildSlotInnerHTML(rowIndex, progressKey, imgSrc) {
+            const pctLabel = progressKey === 'p0' ? '0%' : (progressKey === 'p50' ? '50%' : '100%');
+            const timeKey = progressKey === 'p0' ? 't0' : (progressKey === 'p50' ? 't50' : 't100');
+            const srcKey = progressKey === 'p0' ? 'src0' : (progressKey === 'p50' ? 'src50' : 'src100');
+            const timeVal = reportData.rows[rowIndex]?.[timeKey] || "";
+            const srcVal = reportData.rows[rowIndex]?.[srcKey] || "";
+
+            if (imgSrc) {
+                return `
+                    <img src="${imgSrc}" alt="FOTO ${pctLabel}" class="max-w-[96%] max-h-[82%] object-contain select-none pointer-events-none" />
+                    <input type="text" value="${escapeAttr(timeVal)}" placeholder="JAM (HH:MM)"
+                           onclick="event.stopPropagation()"
+                           onchange="updateSlotTimeManual(${rowIndex}, '${progressKey}', this.value, event)"
+                           class="no-print absolute bottom-0.5 left-1 bg-slate-900/85 text-white placeholder-slate-300 text-[8.5px] font-mono font-bold px-1.5 py-0.2 rounded w-[58px] text-center focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                           title="EDIT WAKTU FOTO MANUAL (CONTOH: 07:30)" />
+                    ${srcVal ? `<span class="no-print absolute top-1 left-1 bg-purple-700/90 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded shadow uppercase max-w-[75px] truncate" title="SUMBER SETORAN TIM: ${escapeAttr(srcVal)}">${escapeAttr(srcVal)}</span>` : ''}
+                    <button type="button" onclick="clearPhotoSlot(${rowIndex}, '${progressKey}', event)" class="absolute top-1 right-1 bg-rose-600 hover:bg-rose-700 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow no-print transition" title="HAPUS FOTO">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                `;
+            }
+            return `<span class="text-[9px] font-bold text-slate-400 select-none no-print">PASTE ${pctLabel} (Q)</span>`;
+        }
+
+        function updateSlotCellDOM(rowIndex, progressKey) {
+            const cell = document.querySelector(`[data-slot-cell][data-row="${rowIndex}"][data-key="${progressKey}"]`);
+            if (!cell) return;
+            const imgSrc = reportData.rows[rowIndex]?.[progressKey] || "";
+            cell.setAttribute('draggable', imgSrc ? 'true' : 'false');
+            cell.classList.toggle('cursor-grab', Boolean(imgSrc));
+            cell.classList.toggle('active:cursor-grabbing', Boolean(imgSrc));
+            cell.innerHTML = buildSlotInnerHTML(rowIndex, progressKey, imgSrc);
+            updateSelectionHighlights();
+            updateCompletenessFilterCounters();
+        }
+
+        function advanceActiveSlot(fromRowIndex, fromKey) {
+            const keys = ['p0', 'p50', 'p100'];
+            const startCol = keys.indexOf(fromKey);
+
+            for (let c = 1; c <= 3; c++) {
+                const checkCol = (startCol + c) % 3;
+                const checkKey = keys[checkCol];
+                if (!reportData.rows[fromRowIndex][checkKey]) {
+                    setActiveSlot(fromRowIndex, checkKey);
+                    return;
+                }
+            }
+
+            for (let r = fromRowIndex + 1; r < reportData.rows.length; r++) {
+                for (let c = 0; c < 3; c++) {
+                    if (!reportData.rows[r][keys[c]]) {
+                        setActiveSlot(r, keys[c]);
+                        return;
+                    }
+                }
+            }
+
+            const nextId = reportData.rows.length > 0 ? Math.max(...reportData.rows.map(r => r.id)) + 1 : 1;
+            reportData.rows.push(ensureRowSchema({ id: nextId, date: "", title: "PEKERJAAN " }, nextId));
+            activeSlot = { rowIndex: reportData.rows.length - 1, progressKey: 'p0' };
+            renderPages();
+        }
+
+        function renderPages() {
+            const workspace = document.getElementById('documentWorkspace');
+            if (!workspace) return;
+
+            updateCompletenessFilterCounters();
+
+            const indexedRows = reportData.rows
+                .map((row, globalIdx) => ({ row, globalIdx, status: getRowCompletenessInfo(row) }))
+                .filter(item => {
+                    if (rowCompletenessFilter === 'INCOMPLETE') return item.status.isIncomplete;
+                    if (rowCompletenessFilter === 'COMPLETE') return item.status.isComplete;
+                    return true;
+                });
+
+            const ROWS_PER_PAGE = 5;
+            const totalFilteredRows = indexedRows.length;
+            const totalDocPages = Math.max(1, Math.ceil(totalFilteredRows / ROWS_PER_PAGE));
+
+            const coverBgClass = reportData.coverUseCyan ? 'bg-[#99f6ff]' : 'bg-white';
+            const coverTextClass = reportData.coverUseCyan ? 'text-[#0c4a55]' : 'text-slate-900';
+
+            let html = `
+                <div class="page-container relative ${coverBgClass} ${coverTextClass} shadow-2xl border border-slate-300 box-border flex flex-col justify-between transition-colors duration-200"
+                     style="width: 210mm; height: 295mm; padding: 10mm;">
+                    <button type="button" onclick="toggleCoverTheme()" class="no-print absolute top-4 right-4 bg-slate-900/85 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1.5 uppercase z-10">
+                        <i class="fa-solid fa-palette"></i> WARNA COVER: ${reportData.coverUseCyan ? 'TOSKA' : 'PUTIH'}
+                    </button>
+
+                    <div class="w-full h-full border-[2.5px] border-slate-900 flex flex-col justify-center px-[12mm] text-left">
+                        <div class="my-auto">
+                            <h1 class="text-[28pt] font-black leading-[1.08] tracking-tight text-left uppercase mb-3">
+                                LAMPIRAN<br>DOKUMENTASI<br>PEKERJAAN
+                            </h1>
+                            <p class="text-[9.5pt] font-extrabold leading-[1.35] text-left uppercase mb-7">
+                                PEKERJAAN PEMOTONGAN RUMPUT, PERAWATAN TANAMAN<br>
+                                DAN KEBERSIHAN PADA RUAS TOL KANCI - PEJAGAN<br>
+                                TAHUN 2026
+                            </p>
+
+                            <div class="flex items-center justify-start gap-2 mb-2">
+                                <span class="text-[19pt] font-black uppercase text-left">MINGGU KE</span>
+                                <input type="text" data-bind-field="headerMinggu" value="${escapeAttr(reportData.headerMinggu)}"
+                                       oninput="updateHeaderField('headerMinggu', this.value)"
+                                       class="bg-transparent text-[19pt] font-black uppercase text-left w-24 focus:outline-none focus:bg-white/40 rounded px-1" />
+                            </div>
+
+                            <div class="flex items-center justify-start gap-2 mb-7">
+                                <span class="text-[10pt] font-extrabold uppercase text-left whitespace-nowrap">PERIODE</span>
+                                <input type="text" data-bind-field="headerPeriode" value="${escapeAttr(reportData.headerPeriode)}"
+                                       oninput="updateHeaderField('headerPeriode', this.value)"
+                                       class="bg-transparent text-[10pt] font-extrabold uppercase text-left w-full focus:outline-none focus:bg-white/40 rounded px-1" />
+                            </div>
+
+                            <div class="w-full">
+                                <input type="text" data-bind-field="headerLokasi" value="${escapeAttr(reportData.headerLokasi)}"
+                                       oninput="updateHeaderField('headerLokasi', this.value)"
+                                       class="bg-transparent text-[22pt] font-black uppercase text-left w-full focus:outline-none focus:bg-white/40 rounded px-1" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            for (let pageIdx = 0; pageIdx < totalDocPages; pageIdx++) {
+                const startIdx = pageIdx * ROWS_PER_PAGE;
+                const pageItems = indexedRows.slice(startIdx, startIdx + ROWS_PER_PAGE);
+                const isLastPage = (pageIdx === totalDocPages - 1);
+
+                html += `
+                    <div class="page-container relative bg-white text-slate-900 shadow-2xl border border-slate-300 box-border flex flex-col justify-between"
+                         style="width: 210mm; height: 295mm; padding: 10mm;">
+                        
+                        <div class="flex flex-col justify-start w-full">
+                            <div class="border-[2px] border-slate-900 py-1.5 px-2 mb-2 bg-white">
+                                <div class="text-[10pt] font-black leading-tight uppercase text-center">DOKUMENTASI FOTO</div>
+                                <div class="text-[7.5pt] font-extrabold leading-tight uppercase text-center">PEKERJAAN PEMOTONGAN RUMPUT, PERAWATAN TANAMAN DAN KEBERSIHAN</div>
+                                <div class="text-[7.5pt] font-extrabold leading-tight uppercase text-center">PADA RUAS TOL KANCI - PEJAGAN TAHUN 2026</div>
+                            </div>
+
+                            <div class="flex justify-between items-center text-[7.5pt] font-extrabold mb-2 px-0.5">
+                                <div class="flex flex-col gap-1 w-[72%]">
+                                    <div class="flex items-center">
+                                        <span class="w-[20mm] text-left uppercase shrink-0">PERIODE :</span>
+                                        <input type="text" data-bind-field="headerPeriode" value="${escapeAttr(reportData.headerPeriode)}"
+                                               oninput="updateHeaderField('headerPeriode', this.value)"
+                                               class="bg-transparent text-left font-extrabold text-[7.5pt] w-full focus:outline-none focus:bg-blue-50 px-1 no-clip-text" />
+                                    </div>
+                                    <div class="flex items-center">
+                                        <span class="w-[20mm] text-left uppercase shrink-0">LOKASI :</span>
+                                        <input type="text" data-bind-field="headerLokasi" value="${escapeAttr(reportData.headerLokasi)}"
+                                               oninput="updateHeaderField('headerLokasi', this.value)"
+                                               class="bg-transparent text-left font-extrabold text-[7.5pt] w-full focus:outline-none focus:bg-blue-50 px-1 no-clip-text" />
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-end gap-1.5 w-[26%]">
+                                    <span class="uppercase whitespace-nowrap">MINGGU KE -</span>
+                                    <input type="text" data-bind-field="headerMinggu" value="${escapeAttr(reportData.headerMinggu)}"
+                                           oninput="updateHeaderField('headerMinggu', this.value)"
+                                           class="bg-transparent text-center font-black text-[8.5pt] w-12 focus:outline-none focus:bg-blue-50 px-1 no-clip-text" />
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col gap-[2mm] w-full">
+                                ${pageItems.length === 0 ? `
+                                    <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-xs font-bold text-slate-500 uppercase no-print">
+                                        TIDAK ADA BARIS PADA FILTER STATUS INI. KLIK "SEMUA" UNTUK MELIHAT SELURUH LAPORAN.
+                                    </div>
+                                ` : pageItems.map(({ row, globalIdx, status }) => {
+                                    const rowNumber = globalIdx + 1;
+                                    let statusBadgeHTML = '';
+                                    if (status.isComplete) {
+                                        statusBadgeHTML = `<span class="no-print ml-1 bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded text-[7.5px] font-black shrink-0" title="DOKUMENTASI 0%, 50%, 100% LENGKAP">LENGKAP 3/3</span>`;
+                                    } else if (status.isIncomplete) {
+                                        statusBadgeHTML = `<span class="no-print ml-1 bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded text-[7.5px] font-black shrink-0" title="SLOT BELUM TERISI: ${escapeAttr(status.missingLabel)}">KURANG: ${escapeAttr(status.missingLabel)}</span>`;
+                                    }
+
+                                    return `
+                                        <div class="row-item border-[1.8px] border-slate-900 flex flex-col box-border bg-white" style="height: 44.5mm;">
+                                            <div class="grid grid-cols-3 bg-[#1e3a8a] text-white border-b-[1.5px] border-slate-900 shrink-0" style="height: 6mm;">
+                                                <div class="col-span-1 flex items-center border-r-[1.5px] border-slate-900 px-1.5 h-full">
+                                                    <span class="font-black text-[7pt] leading-none w-5 text-center shrink-0 border-r border-white/30 mr-1 py-0.5">${rowNumber}</span>
+                                                    <input type="text" value="${escapeAttr(row.date)}"
+                                                           placeholder="HARI, TANGGAL BULAN TAHUN"
+                                                           onchange="updateRowField(${globalIdx}, 'date', this.value); this.value = reportData.rows[${globalIdx}].date;"
+                                                           oninput="reportData.rows[${globalIdx}].date = this.value.toUpperCase(); scheduleSaveToLocalStorage();"
+                                                           class="bg-transparent text-white placeholder-blue-200/70 font-extrabold text-[6.8pt] leading-none h-full w-full text-center focus:outline-none focus:bg-blue-800 no-clip-text" />
+                                                </div>
+                                                <div class="col-span-2 flex items-center justify-between px-2 h-full">
+                                                    <input type="text" value="${escapeAttr(row.title)}"
+                                                           placeholder="PEKERJAAN ..."
+                                                           oninput="updateRowField(${globalIdx}, 'title', this.value)"
+                                                           class="bg-transparent text-white placeholder-blue-200/70 font-extrabold text-[6.8pt] leading-none h-full w-full text-center focus:outline-none focus:bg-blue-800 no-clip-text" />
+                                                    ${statusBadgeHTML}
+                                                    <button type="button" onclick="deleteRow(${globalIdx})" class="no-print ml-1 bg-rose-600 hover:bg-rose-700 text-white w-4 h-4 rounded flex items-center justify-center text-[8px] shrink-0" title="HAPUS BARIS ${rowNumber}">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-3 bg-white text-slate-900 border-b-[1.5px] border-slate-900 font-black text-[7pt] shrink-0" style="height: 4.8mm;">
+                                                <div class="border-r-[1.5px] border-slate-900 flex items-center justify-center h-full"><span class="leading-none block">0%</span></div>
+                                                <div class="border-r-[1.5px] border-slate-900 flex items-center justify-center h-full"><span class="leading-none block">50%</span></div>
+                                                <div class="flex items-center justify-center h-full"><span class="leading-none block">100%</span></div>
+                                            </div>
+
+                                            <div class="grid grid-cols-3 flex-grow overflow-hidden bg-white">
+                                                ${['p0', 'p50', 'p100'].map((pKey, cIdx) => {
+                                                    const isSelected = (activeSlot.rowIndex === globalIdx && activeSlot.progressKey === pKey);
+                                                    const borderRight = cIdx < 2 ? 'border-r-[1.5px] border-slate-900' : '';
+                                                    const highlightCls = isSelected ? 'ring-2 ring-blue-600 ring-inset bg-blue-50/40' : '';
+                                                    const hasImg = Boolean(row[pKey]);
+                                                    const cursorCls = hasImg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer';
+                                                    return `
+                                                        <div data-slot-cell="true" data-row="${globalIdx}" data-key="${pKey}"
+                                                             draggable="${hasImg ? 'true' : 'false'}"
+                                                             ondragstart="handleSlotDragStart(${globalIdx}, '${pKey}', event)"
+                                                             ondragover="handleSlotDragOver(${globalIdx}, '${pKey}', event)"
+                                                             ondragleave="handleSlotDragLeave(event)"
+                                                             ondrop="handleSlotDrop(${globalIdx}, '${pKey}', event)"
+                                                             ondragend="handleSlotDragEnd(event)"
+                                                             onclick="setActiveSlot(${globalIdx}, '${pKey}')"
+                                                             class="relative flex items-center justify-center overflow-hidden ${cursorCls} ${borderRight} ${highlightCls}">
+                                                            ${buildSlotInnerHTML(globalIdx, pKey, row[pKey])}
+                                                        </div>
+                                                    `;
+                                                }).join('')}
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+
+                            ${isLastPage ? `
+                                <div class="mt-4 px-4 grid grid-cols-2 gap-10 text-[7.5pt] font-extrabold text-slate-900">
+                                    <div class="flex flex-col items-center text-center">
+                                        <div class="h-4"></div>
+                                        <input type="text" data-bind-field="signLeftTitle" value="${escapeAttr(reportData.signLeftTitle)}"
+                                               oninput="updateHeaderField('signLeftTitle', this.value)"
+                                               class="bg-transparent font-extrabold text-[7.5pt] text-center w-full focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <input type="text" data-bind-field="signLeftCompany" value="${escapeAttr(reportData.signLeftCompany)}"
+                                               oninput="updateHeaderField('signLeftCompany', this.value)"
+                                               class="bg-transparent font-extrabold text-[7.5pt] text-center w-full focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <div class="h-12"></div>
+                                        <input type="text" data-bind-field="signLeftName" value="${escapeAttr(reportData.signLeftName)}"
+                                               oninput="updateHeaderField('signLeftName', this.value)"
+                                               class="bg-transparent font-black text-[7.5pt] text-center w-full underline decoration-slate-900 underline-offset-2 focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <input type="text" data-bind-field="signLeftRole" value="${escapeAttr(reportData.signLeftRole)}"
+                                               oninput="updateHeaderField('signLeftRole', this.value)"
+                                               class="bg-transparent font-extrabold text-[7pt] text-center w-full focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                    </div>
+
+                                    <div class="flex flex-col items-center text-center">
+                                        <input type="text" data-bind-field="signRightLocationDate" value="${escapeAttr(reportData.signRightLocationDate)}"
+                                               oninput="updateHeaderField('signRightLocationDate', this.value)"
+                                               class="bg-transparent font-extrabold text-[7.5pt] text-center w-full h-4 focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <input type="text" data-bind-field="signRightTitle" value="${escapeAttr(reportData.signRightTitle)}"
+                                               oninput="updateHeaderField('signRightTitle', this.value)"
+                                               class="bg-transparent font-extrabold text-[7.5pt] text-center w-full focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <input type="text" data-bind-field="signRightCompany" value="${escapeAttr(reportData.signRightCompany)}"
+                                               oninput="updateHeaderField('signRightCompany', this.value)"
+                                               class="bg-transparent font-extrabold text-[7.5pt] text-center w-full focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <div class="h-12"></div>
+                                        <input type="text" data-bind-field="signRightName" value="${escapeAttr(reportData.signRightName)}"
+                                               oninput="updateHeaderField('signRightName', this.value)"
+                                               class="bg-transparent font-black text-[7.5pt] text-center w-full underline decoration-slate-900 underline-offset-2 focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                        <input type="text" data-bind-field="signRightRole" value="${escapeAttr(reportData.signRightRole)}"
+                                               oninput="updateHeaderField('signRightRole', this.value)"
+                                               class="bg-transparent font-extrabold text-[7pt] text-center w-full focus:outline-none focus:bg-blue-50 no-clip-text" />
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="border-t border-slate-400 pt-1 flex justify-between items-center text-[6.5pt] font-bold text-slate-600 shrink-0">
+                            <span>LAMPIRAN DOKUMENTASI PEKERJAAN • RUAS TOL KANCI - PEJAGAN</span>
+                            <span class="font-black text-slate-900">HALAMAN ${pageIdx + 1} DARI ${totalDocPages}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            workspace.innerHTML = html;
+            updateSelectionHighlights();
+        }
+
+        function escapeAttr(str) {
+            return String(str || "")
+                .replace(/&/g, "&amp;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+        }
+
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                const tag = (e.target?.tagName || '').toUpperCase();
+                const isEditingText = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !isEditingText) {
+                    e.preventDefault();
+                    undoAction();
+                    return;
+                }
+
+                if (!isEditingText && e.key.toLowerCase() === 'q') {
+                    e.preventDefault();
+                    triggerPasteFromClipboard();
+                    return;
+                }
+
+                if (!isEditingText && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                    e.preventDefault();
+                    const keys = ['p0', 'p50', 'p100'];
+                    let c = keys.indexOf(activeSlot.progressKey);
+                    let r = activeSlot.rowIndex;
+
+                    if (e.key === 'ArrowLeft') c = Math.max(0, c - 1);
+                    if (e.key === 'ArrowRight') c = Math.min(2, c + 1);
+                    if (e.key === 'ArrowUp') r = Math.max(0, r - 1);
+                    if (e.key === 'ArrowDown') r = Math.min(reportData.rows.length - 1, r + 1);
+
+                    setActiveSlot(r, keys[c]);
+                }
+            });
+        }
+
+        function setupPasteListener() {
+            document.addEventListener('paste', (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        e.preventDefault();
+                        const blob = items[i].getAsFile();
+                        if (blob) handleSinglePastedImage(blob);
+                        break;
+                    }
+                }
+            });
+        }
+
+        async function triggerPasteFromClipboard() {
+            try {
+                if (!navigator.clipboard || !navigator.clipboard.read) {
+                    showToast("GUNAKAN CTRL+V", "TEKAN CTRL+V UNTUK MENEMPEL GAMBAR DARI CLIPBOARD.", "info");
+                    return;
+                }
+                const clipboardItems = await navigator.clipboard.read();
+                for (const item of clipboardItems) {
+                    const imageType = item.types.find(t => t.startsWith('image/'));
+                    if (imageType) {
+                        const blob = await item.getType(imageType);
+                        await handleSinglePastedImage(blob);
+                        return;
+                    }
+                }
+                showToast("CLIPBOARD KOSONG", "TIDAK ADA GAMBAR DI CLIPBOARD.", "info");
+            } catch (err) {
+                showToast("TEKAN CTRL+V", "SILAKAN TEKAN CTRL+V SECARA LANGSUNG.", "info");
+            }
+        }
+
+        async function prepareFastImageAssets(blob, maxWidth = 1000, quality = 0.80) {
+            try {
+                if (typeof createImageBitmap === 'function') {
+                    const bitmap = await createImageBitmap(blob, {
+                        resizeWidth: maxWidth,
+                        resizeQuality: 'medium'
+                    });
+                    const w = bitmap.width;
+                    const h = bitmap.height;
+
+                    const dispCanvas = document.createElement('canvas');
+                    dispCanvas.width = w;
+                    dispCanvas.height = h;
+                    const dispCtx = dispCanvas.getContext('2d', { alpha: false });
+                    dispCtx.drawImage(bitmap, 0, 0, w, h);
+                    const displayUrl = dispCanvas.toDataURL('image/jpeg', quality);
+                    dispCanvas.width = 0;
+                    dispCanvas.height = 0;
+
+                    const cropY = Math.floor(h * 0.55);
+                    const cropH = h - cropY;
+                    const ocrTargetW = Math.min(w, 540);
+                    const ocrScale = ocrTargetW / Math.max(1, w);
+                    const ocrCanvas = document.createElement('canvas');
+                    ocrCanvas.width = Math.round(w * ocrScale);
+                    ocrCanvas.height = Math.round(cropH * ocrScale);
+                    const ocrCtx = ocrCanvas.getContext('2d', { alpha: false });
+                    ocrCtx.drawImage(bitmap, 0, cropY, w, cropH, 0, 0, ocrCanvas.width, ocrCanvas.height);
+                    const ocrUrl = ocrCanvas.toDataURL('image/jpeg', 0.65);
+                    ocrCanvas.width = 0;
+                    ocrCanvas.height = 0;
+
+                    bitmap.close();
+                    return { displayUrl, ocrUrl };
+                }
+            } catch (_) {}
+
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const w = img.naturalWidth || img.width;
+                        const h = img.naturalHeight || img.height;
+                        const scale = w > maxWidth ? (maxWidth / w) : 1;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(w * scale);
+                        canvas.height = Math.round(h * scale);
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const displayUrl = canvas.toDataURL('image/jpeg', quality);
+                        canvas.width = 0;
+                        canvas.height = 0;
+                        resolve({ displayUrl, ocrUrl: displayUrl });
+                    };
+                    img.onerror = () => resolve({ displayUrl: ev.target.result, ocrUrl: ev.target.result });
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function handleSinglePastedImage(blob) {
+            const targetRow = activeSlot.rowIndex;
+            const targetKey = activeSlot.progressKey;
+            if (!reportData.rows[targetRow]) return;
+
+            pushHistory();
+
+            const instantUrl = URL.createObjectURL(blob);
+            reportData.rows[targetRow][targetKey] = instantUrl;
+            updateSlotCellDOM(targetRow, targetKey);
+            advanceActiveSlot(targetRow, targetKey);
+
+            const { displayUrl, ocrUrl } = await prepareFastImageAssets(blob, 1000, 0.80);
+            if (reportData.rows[targetRow]) {
+                reportData.rows[targetRow][targetKey] = displayUrl;
+                updateSlotCellDOM(targetRow, targetKey);
+            }
+            URL.revokeObjectURL(instantUrl);
+
+            const ocrInfo = await analyzeWatermarkFromImage(displayUrl, ocrUrl);
+            if (ocrInfo && reportData.rows[targetRow]) {
+                let updatedMeta = false;
+                if (ocrInfo.time) {
+                    const tKey = targetKey === 'p0' ? 't0' : (targetKey === 'p50' ? 't50' : 't100');
+                    if (!reportData.rows[targetRow][tKey]) {
+                        reportData.rows[targetRow][tKey] = ocrInfo.time;
+                        updatedMeta = true;
+                    }
+                }
+                if (ocrInfo.date) {
+                    const formattedDate = normalizeDateToIndoText(ocrInfo.date);
+                    if (!reportData.rows[targetRow].date) {
+                        reportData.rows[targetRow].date = formattedDate;
+                        updatedMeta = true;
+                    }
+                    if (targetRow === 0) {
+                        syncWeeklyPeriodFromFirstDate(formattedDate);
+                    }
+                }
+                if (ocrInfo.title && ocrInfo.title !== "PEKERJAAN") {
+                    const curTitle = (reportData.rows[targetRow].title || "").trim();
+                    if (!curTitle || curTitle === "PEKERJAAN" || curTitle.startsWith("PEKERJAAN ROUNDING KM 230+600B")) {
+                        reportData.rows[targetRow].title = ocrInfo.title;
+                        updatedMeta = true;
+                    }
+                }
+                if (updatedMeta || targetRow === 0) {
+                    renderPages();
+                }
+            }
+            scheduleSaveToLocalStorage();
+        }
+
+        async function extractWatermarkWithGemini(imageDataUrl) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6500);
+            try {
+                const base64Data = imageDataUrl.split(',')[1];
+                if (!base64Data) return null;
+
+                const promptText = `Baca kartu watermark proyek (kotak GALASKA MANDIRI PERSADA di bawah foto). Ekstrak persis:
+- pekerjaan: nama pada baris "Pekerjaan" (contoh: "PEMBERSIH SALURAN", "ROUNDING", "DRAINASE", "POTONG RUMPUT")
+- kmMulai: KM pada baris "KM Mulai" (contoh: "248+200B")
+- kmSelesai: KM pada baris "KM Selesai" (kosong "" jika tidak ada)
+- tanggal: tanggal pada "Waktu"/"Time" format DD/MM/YYYY
+- waktu: jam pada "Waktu"/"Time" format HH:MM
+- progress: "0%", "50%", atau "100%" (kosong "" jika tidak jelas)`;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: promptText },
+                                { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
+                            ]
+                        }],
+                        generationConfig: {
+                            temperature: 0,
+                            thinkingConfig: { thinkingBudget: 0 },
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    pekerjaan: { type: "STRING" },
+                                    kmMulai: { type: "STRING" },
+                                    kmSelesai: { type: "STRING" },
+                                    tanggal: { type: "STRING" },
+                                    waktu: { type: "STRING" },
+                                    progress: { type: "STRING" }
+                                }
+                            }
+                        }
+                    })
+                });
+
+                if (!response.ok) return null;
+                const json = await response.json();
+                const textOut = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!textOut) return null;
+
+                const data = JSON.parse(textOut);
+                return buildStructuredWatermarkResult(data);
+            } catch (_) {
+                return null;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        function buildStructuredWatermarkResult(data) {
+            if (!data) return null;
+            let rawPekerjaan = (data.pekerjaan || "").toUpperCase().trim();
+            rawPekerjaan = rawPekerjaan.replace(/^PEKERJAAN\s+/i, "").trim();
+
+            let kmStart = (data.kmMulai || "").toUpperCase().replace(/^KM\s*/i, "").trim();
+            let kmEnd = (data.kmSelesai || "").toUpperCase().replace(/^KM\s*/i, "").trim();
+
+            let fullTitle = "";
+            if (rawPekerjaan) {
+                fullTitle = `PEKERJAAN ${rawPekerjaan}`;
+                if (kmStart && kmEnd) {
+                    fullTitle += ` KM ${kmStart} S/D KM ${kmEnd}`;
+                } else if (kmStart) {
+                    fullTitle += ` KM ${kmStart} S/D KM ${kmStart}`;
+                }
+            }
+
+            let formattedDate = "";
+            if (data.tanggal) {
+                formattedDate = normalizeDateToIndoText(data.tanggal);
+            }
+
+            let progressKey = "";
+            const progRaw = (data.progress || "").replace(/\s+/g, "");
+            if (progRaw.includes("100")) progressKey = "p100";
+            else if (progRaw.includes("50")) progressKey = "p50";
+            else if (progRaw.includes("0")) progressKey = "p0";
+
+            return {
+                title: fullTitle,
+                date: formattedDate,
+                time: (data.waktu || "").trim(),
+                progress: progressKey
+            };
+        }
+
+        async function analyzeWatermarkFromImage(imageDataUrl, precomputedOcrUrl = null) {
+            const ocrCropUrl = precomputedOcrUrl || await createFastOcrPayload(imageDataUrl, false);
+            let parsed = await extractWatermarkWithGemini(ocrCropUrl || imageDataUrl);
+
+            if (!parsed || (!parsed.date && !parsed.title)) {
+                const highContrastCropUrl = await createFastOcrPayload(imageDataUrl, true);
+                if (highContrastCropUrl && typeof Tesseract !== 'undefined') {
+                    try {
+                        if (!tesseractWorkerPromise) {
+                            tesseractWorkerPromise = Tesseract.createWorker('eng');
+                        }
+                        const worker = await tesseractWorkerPromise;
+                        const result = await worker.recognize(highContrastCropUrl);
+                        const rawText = result?.data?.text || "";
+                        if (rawText.trim()) {
+                            parsed = parseWatermarkText(rawText);
+                        }
+                    } catch (_) {}
+                }
+            }
+            return parsed;
+        }
+
+        async function handleBatchImageUpload(event) {
+            const fileList = Array.from(event.target?.files || []);
+            event.target.value = "";
+            if (!fileList.length) return;
+
+            const modal = document.getElementById('batchUploadModal');
+            const statusEl = document.getElementById('batchProgressStatus');
+            const barEl = document.getElementById('batchProgressBar');
+
+            if (modal) modal.classList.remove('hidden');
+            if (statusEl) statusEl.textContent = `MENYIAPKAN ${fileList.length} FOTO...`;
+            if (barEl) barEl.style.width = `8%`;
+            pushHistory();
+
+            try {
+                fileList.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+                const preparedAssets = new Array(fileList.length);
+                let prepCount = 0;
+                let prepCursor = 0;
+
+                await Promise.all(Array.from({ length: Math.min(16, fileList.length) }, async () => {
+                    while (true) {
+                        const idx = prepCursor++;
+                        if (idx >= fileList.length) break;
+                        const { displayUrl, ocrUrl } = await prepareFastImageAssets(fileList[idx], 920, 0.76);
+                        preparedAssets[idx] = { displayUrl, ocrUrl, file: fileList[idx] };
+                        prepCount++;
+                        if (prepCount % 3 === 0 || prepCount === fileList.length) {
+                            const pct = 8 + Math.round((prepCount / fileList.length) * 32);
+                            if (statusEl) statusEl.textContent = `KOMPRESI FOTO ${prepCount} / ${fileList.length}...`;
+                            if (barEl) barEl.style.width = `${pct}%`;
+                        }
+                    }
+                }));
+
+                const ocrResults = new Array(fileList.length).fill(null);
+                const CHUNK_SIZE = 6;
+                const chunks = [];
+                for (let start = 0; start < preparedAssets.length; start += CHUNK_SIZE) {
+                    chunks.push({ start, items: preparedAssets.slice(start, start + CHUNK_SIZE) });
+                }
+
+                let ocrDoneCount = 0;
+                let chunkCursor = 0;
+
+                await Promise.all(Array.from({ length: Math.min(6, chunks.length) }, async () => {
+                    while (true) {
+                        const cIdx = chunkCursor++;
+                        if (cIdx >= chunks.length) break;
+                        const chunk = chunks[cIdx];
+
+                        let parsedList = await extractBatchCollageWithGemini(chunk.items.map(it => it.ocrUrl));
+
+                        if (!parsedList || parsedList.length !== chunk.items.length) {
+                            parsedList = await Promise.all(
+                                chunk.items.map(it => analyzeWatermarkFromImage(it.displayUrl, it.ocrUrl))
+                            );
+                        }
+
+                        for (let k = 0; k < chunk.items.length; k++) {
+                            ocrResults[chunk.start + k] = parsedList[k] || null;
+                        }
+
+                        ocrDoneCount += chunk.items.length;
+                        const pct = 40 + Math.round((ocrDoneCount / fileList.length) * 58);
+                        if (statusEl) statusEl.textContent = `MEMBACA WATERMARK ${ocrDoneCount} / ${fileList.length}...`;
+                        if (barEl) barEl.style.width = `${pct}%`;
+                    }
+                }));
+
+                const analyzedItems = preparedAssets.map((asset, i) => {
+                    const info = ocrResults[i];
+                    const detectedTitle = (info?.title && info.title.trim() !== "PEKERJAAN")
+                        ? info.title.trim().toUpperCase()
+                        : "PEKERJAAN LAINNYA";
+                    const detectedDate = (info?.date || "").trim().toUpperCase();
+                    const detectedProgress = info?.progress || "";
+                    const detectedTime = (info?.time || "").trim();
+
+                    return {
+                        dataUrl: asset.displayUrl,
+                        title: detectedTitle,
+                        date: detectedDate,
+                        time: detectedTime,
+                        progress: detectedProgress,
+                        fileName: asset.file.name.toUpperCase(),
+                        lastModified: asset.file.lastModified || i
+                    };
+                });
+
+                const groupsMap = new Map();
+                for (const item of analyzedItems) {
+                    const key = `${normalizeWorkTitleKey(item.title)}||${(item.date || "").replace(/[^A-Z0-9]/g, "")}`;
+                    if (!groupsMap.has(key)) {
+                        groupsMap.set(key, {
+                            title: item.title,
+                            date: item.date,
+                            items: []
+                        });
+                    }
+                    const grp = groupsMap.get(key);
+                    if (item.title.length > grp.title.length && item.title !== "PEKERJAAN LAINNYA") {
+                        grp.title = item.title;
+                    }
+                    if (!grp.date && item.date) {
+                        grp.date = item.date;
+                    }
+                    grp.items.push(item);
+                }
+
+                const newRows = [];
+                let nextId = 1;
+
+                for (const grp of groupsMap.values()) {
+                    grp.items.sort((a, b) => {
+                        if (a.time && b.time && a.time !== b.time) {
+                            return timeToMinutes(a.time) - timeToMinutes(b.time);
+                        }
+                        return a.lastModified - b.lastModified;
+                    });
+
+                    let currentRow = ensureRowSchema({ id: nextId++, date: grp.date, title: grp.title }, nextId);
+                    const timeKeyMap = { p0: 't0', p50: 't50', p100: 't100' };
+
+                    for (const photo of grp.items) {
+                        let targetSlot = photo.progress;
+                        if (targetSlot && !currentRow[targetSlot]) {
+                            currentRow[targetSlot] = photo.dataUrl;
+                            currentRow[timeKeyMap[targetSlot]] = photo.time || "";
+                        } else {
+                            if (!currentRow.p0) {
+                                currentRow.p0 = photo.dataUrl;
+                                currentRow.t0 = photo.time || "";
+                            } else if (!currentRow.p50) {
+                                currentRow.p50 = photo.dataUrl;
+                                currentRow.t50 = photo.time || "";
+                            } else if (!currentRow.p100) {
+                                currentRow.p100 = photo.dataUrl;
+                                currentRow.t100 = photo.time || "";
+                            } else {
+                                newRows.push(currentRow);
+                                const slotAfterFull = targetSlot || 'p0';
+                                currentRow = ensureRowSchema({ id: nextId++, date: grp.date, title: grp.title }, nextId);
+                                currentRow[slotAfterFull] = photo.dataUrl;
+                                currentRow[timeKeyMap[slotAfterFull]] = photo.time || "";
+                            }
+                        }
+                    }
+                    newRows.push(currentRow);
+                }
+
+                if (newRows.length > 0) {
+                    reportData.rows = newRows;
+                    if (newRows[0].date) {
+                        syncWeeklyPeriodFromFirstDate(newRows[0].date);
+                    }
+                    activeSlot = { rowIndex: 0, progressKey: 'p0' };
+                    renderPages();
+                    scheduleSaveToLocalStorage();
+                    showToast("UPLOAD SELESAI", `${fileList.length} FOTO DIKELOMPOKKAN KE ${newRows.length} BARIS PEKERJAAN.`, "success");
+                }
+            } catch (err) {
+                showToast("GAGAL MEMPROSES", "TERJADI KESALAHAN SAAT UPLOAD BANYAK FOTO.", "error");
+            } finally {
+                if (modal) modal.classList.add('hidden');
+            }
+        }
+
+        async function extractBatchCollageWithGemini(ocrUrls) {
+            if (!ocrUrls || !ocrUrls.length) return null;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8500);
+            try {
+                const imgs = await Promise.all(ocrUrls.map(url => new Promise((res) => {
+                    const im = new Image();
+                    im.onload = () => res(im);
+                    im.onerror = () => res(null);
+                    im.src = url;
+                })));
+                if (imgs.some(im => !im)) return null;
+
+                const cellW = 480;
+                const cellH = 210;
+                const canvas = document.createElement('canvas');
+                canvas.width = cellW;
+                canvas.height = cellH * imgs.length;
+                const ctx = canvas.getContext('2d', { alpha: false });
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                imgs.forEach((im, idx) => {
+                    const y = idx * cellH;
+                    ctx.drawImage(im, 0, y, cellW, cellH);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(0, y, 76, 22);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 13px sans-serif';
+                    ctx.fillText(`FOTO #${idx + 1}`, 6, y + 15);
+                });
+
+                const collageBase64 = canvas.toDataURL('image/jpeg', 0.68).split(',')[1];
+                canvas.width = 0;
+                canvas.height = 0;
+
+                const promptText = `Gambar ini berisi ${imgs.length} potongan watermark proyek yang disusun vertikal berurutan dari FOTO #1 sampai FOTO #${imgs.length}.
+Untuk SETIAP potongan FOTO #1 sampai FOTO #${imgs.length}, baca kartu watermark GALASKA MANDIRI PERSADA dan kembalikan array JSON persis ${imgs.length} item sesuai urutan atas ke bawah:
+- index: nomor urut 1..${imgs.length}
+- pekerjaan: nama pada baris "Pekerjaan" (contoh: "PEMBERSIH SALURAN", "ROUNDING", "DRAINASE", "POTONG RUMPUT")
+- kmMulai: KM pada baris "KM Mulai" (contoh: "248+200B")
+- kmSelesai: KM pada baris "KM Selesai" (kosong "" jika tidak ada)
+- tanggal: tanggal pada "Waktu"/"Time" format DD/MM/YYYY
+- waktu: jam pada "Waktu"/"Time" format HH:MM
+- progress: "0%", "50%", atau "100%" (kosong "" jika tidak jelas)`;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: promptText },
+                                { inlineData: { mimeType: 'image/jpeg', data: collageBase64 } }
+                            ]
+                        }],
+                        generationConfig: {
+                            temperature: 0,
+                            thinkingConfig: { thinkingBudget: 0 },
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        index: { type: "INTEGER" },
+                                        pekerjaan: { type: "STRING" },
+                                        kmMulai: { type: "STRING" },
+                                        kmSelesai: { type: "STRING" },
+                                        tanggal: { type: "STRING" },
+                                        waktu: { type: "STRING" },
+                                        progress: { type: "STRING" }
+                                    }
+                                }
+                            }
+                        }
+                    })
+                });
+
+                if (!response.ok) return null;
+                const json = await response.json();
+                const textOut = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!textOut) return null;
+
+                const arr = JSON.parse(textOut);
+                if (!Array.isArray(arr) || arr.length !== imgs.length) return null;
+
+                return arr.map(item => buildStructuredWatermarkResult(item));
+            } catch (_) {
+                return null;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        function createFastOcrPayload(imageDataUrl, highContrast = false) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const w = img.naturalWidth || img.width;
+                        const h = img.naturalHeight || img.height;
+                        const cropY = Math.floor(h * 0.52);
+                        const cropH = h - cropY;
+
+                        const targetW = Math.min(w, highContrast ? 1200 : 960);
+                        const scale = targetW / Math.max(1, w);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(w * scale);
+                        canvas.height = Math.round(cropH * scale);
+                        const ctx = canvas.getContext('2d');
+                        if (highContrast) {
+                            ctx.filter = 'contrast(135%) grayscale(100%)';
+                        }
+                        ctx.drawImage(img, 0, cropY, w, cropH, 0, 0, canvas.width, canvas.height);
+
+                        const out = canvas.toDataURL('image/jpeg', highContrast ? 0.85 : 0.78);
+                        canvas.width = 0;
+                        canvas.height = 0;
+                        resolve(out);
+                    } catch (_) {
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => resolve(null);
+                img.src = imageDataUrl;
+            });
+        }
+
+        function parseWatermarkText(rawText) {
+            const lines = rawText
+                .split(/?
+/)
+                .map(l => l.trim().toUpperCase())
+                .filter(Boolean);
+
+            let pekerjaan = "";
+            let kmMulai = "";
+            let kmSelesai = "";
+            let tanggal = "";
+            let waktu = "";
+            let progress = "";
+
+            for (const line of lines) {
+                if (/100\s*%/.test(line)) progress = "p100";
+                else if (/50\s*%/.test(line)) progress = "p50";
+                else if (/0\s*%/.test(line)) progress = "p0";
+
+                if (line.includes("PEKERJAAN")) {
+                    const m = line.split(/PEKERJAAN\s*[:\-]?\s*/i);
+                    if (m[1]) pekerjaan = m[1].trim();
+                } else if (line.includes("MULAI")) {
+                    const m = line.split(/MULAI\s*[:\-]?\s*/i);
+                    if (m[1]) kmMulai = m[1].replace(/^KM\s*/i, "").trim();
+                } else if (line.includes("SELESAI")) {
+                    const m = line.split(/SELESAI\s*[:\-]?\s*/i);
+                    if (m[1]) kmSelesai = m[1].replace(/^KM\s*/i, "").trim();
+                } else if (line.includes("WAKTU") || line.includes("TIME")) {
+                    const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{1,2}\s+[A-Z]{3,10}\s+\d{4})/);
+                    if (dateMatch) tanggal = dateMatch[1];
+                    const timeMatch = line.match(/(\d{2}:\d{2})/);
+                    if (timeMatch) waktu = timeMatch[1];
+                }
+            }
+
+            return buildStructuredWatermarkResult({
+                pekerjaan,
+                kmMulai,
+                kmSelesai,
+                tanggal,
+                waktu,
+                progress
+            });
+        }
+
+        function saveProjectData() {
+            try {
+                const jsonStr = JSON.stringify(reportData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const safeName = (reportData.headerPeriode || 'LAPORAN').replace(/[^A-Z0-9\-]+/gi, '_');
+                const teamTag = (combatConfig.team || '').replace(/[^A-Z0-9\-]+/gi, '_');
+                a.href = url;
+                a.download = `SETORAN_${teamTag ? teamTag + '_' : ''}${safeName}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("JSON TERSIMPAN", "FILE SETORAN / PROYEK BERHASIL DIUNDUH.", "success");
+            } catch (e) {
+                showToast("GAGAL SAVE", "TIDAK DAPAT MENYIMPAN FILE JSON.", "error");
+            }
+        }
+
+        function loadProjectData(event) {
+            const file = event.target?.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed && Array.isArray(parsed.rows)) {
+                        pushHistory();
+                        parsed.rows = parsed.rows.map((r, i) => ensureRowSchema(r, i + 1));
+                        Object.assign(reportData, parsed);
+                        activeSlot = { rowIndex: 0, progressKey: 'p0' };
+                        renderPages();
+                        scheduleSaveToLocalStorage();
+                        showToast("JSON DIMUAT", "DATA PROYEK BERHASIL DIBUKA.", "success");
+                    } else {
+                        showToast("FORMAT SALAH", "FILE JSON TIDAK VALID.", "error");
+                    }
+                } catch (err) {
+                    showToast("GAGAL LOAD", "FILE JSON RUSAK ATAU TIDAK TERBACA.", "error");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function resetData() {
+            pushHistory();
+            rowCompletenessFilter = 'ALL';
+            reportData = {
+                headerPeriode: "12 - 18 OKTOBER 2026",
+                endDateFull: "18 OKTOBER 2026",
+                headerLokasi: "MAINLANE A DAN B",
+                headerMinggu: "34",
+                coverUseCyan: true,
+                signLeftTitle: "DIPERIKSA OLEH,",
+                signLeftCompany: "PT SEMESTA MARGA RAYA",
+                signLeftName: "MUHAMAD ISKHAQ",
+                signLeftRole: "STAFF PEMELIHARAAN",
+                signRightLocationDate: "CIREBON, 18 OKTOBER 2026",
+                signRightTitle: "DIBUAT OLEH,",
+                signRightCompany: "PT GALASKA MANDIRI PERSADA",
+                signRightName: "AHMAD NU'MAN NUR AZHAR",
+                signRightRole: "PROJECT MANAGER",
+                rows: [
+                    ensureRowSchema({ id: 1, date: "SENIN, 12 OKTOBER 2026", title: "PEKERJAAN ROUNDING KM 230+600B S/D KM 228+600B" }, 1),
+                    ensureRowSchema({ id: 2, date: "", title: "PEKERJAAN " }, 2),
+                    ensureRowSchema({ id: 3, date: "", title: "PEKERJAAN " }, 3),
+                    ensureRowSchema({ id: 4, date: "", title: "PEKERJAAN " }, 4),
+                    ensureRowSchema({ id: 5, date: "", title: "PEKERJAAN " }, 5)
+                ]
+            };
+            activeSlot = { rowIndex: 0, progressKey: 'p0' };
+            renderPages();
+            scheduleSaveToLocalStorage();
+            showToast("DATA DIRESET", "HALAMAN KEMBALI KE TEMPLATE AWAL.", "info");
+        }
+
+        async function saveAsPDF() {
+            const totalRows = reportData.rows.length;
+            if (!totalRows) return;
+
+            showToast("MEMBUAT PDF...", "MERENDER VEKTOR PRESISI A4 SECARA KILAT...", "info");
+            await new Promise(r => setTimeout(r, 30));
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4',
+                    compress: true
+                });
+
+                const PAGE_W = 210;
+                const PAGE_H = 297;
+                const MARGIN = 10;
+                const CONTENT_W = PAGE_W - (MARGIN * 2);
+
+                if (reportData.coverUseCyan) {
+                    pdf.setFillColor(153, 246, 255);
+                    pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
+                    pdf.setTextColor(12, 74, 85);
+                } else {
+                    pdf.setFillColor(255, 255, 255);
+                    pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
+                    pdf.setTextColor(15, 23, 42);
+                }
+
+                pdf.setDrawColor(15, 23, 42);
+                pdf.setLineWidth(0.7);
+                pdf.rect(MARGIN, MARGIN, CONTENT_W, PAGE_H - (MARGIN * 2));
+
+                const coverLeftX = MARGIN + 12;
+                let coverY = 98;
+
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(28);
+                pdf.text(['LAMPIRAN', 'DOKUMENTASI', 'PEKERJAAN'], coverLeftX, coverY, { lineHeightFactor: 1.12 });
+
+                coverY += 34;
+                pdf.setFontSize(9.5);
+                pdf.text([
+                    'PEKERJAAN PEMOTONGAN RUMPUT, PERAWATAN TANAMAN',
+                    'DAN KEBERSIHAN PADA RUAS TOL KANCI - PEJAGAN',
+                    'TAHUN 2026'
+                ], coverLeftX, coverY, { lineHeightFactor: 1.38 });
+
+                coverY += 20;
+                pdf.setFontSize(19);
+                pdf.text(`MINGGU KE  ${(reportData.headerMinggu || '').toUpperCase()}`, coverLeftX, coverY);
+
+                coverY += 8.5;
+                pdf.setFontSize(10);
+                pdf.text(`PERIODE   ${(reportData.headerPeriode || '').toUpperCase()}`, coverLeftX, coverY);
+
+                coverY += 16;
+                pdf.setFontSize(22);
+                const lokasiLines = pdf.splitTextToSize((reportData.headerLokasi || '').toUpperCase(), CONTENT_W - 24);
+                pdf.text(lokasiLines, coverLeftX, coverY, { lineHeightFactor: 1.15 });
+
+                const ROWS_PER_PAGE = 5;
+                const totalDocPages = Math.max(1, Math.ceil(totalRows / ROWS_PER_PAGE));
+
+                const loadImageMeta = (src) => new Promise((resolve) => {
+                    if (!src) return resolve(null);
+                    const im = new Image();
+                    im.onload = () => resolve({ img: im, w: im.naturalWidth || im.width, h: im.naturalHeight || im.height });
+                    im.onerror = () => resolve(null);
+                    im.src = src;
+                });
+
+                const allSlotPromises = [];
+                reportData.rows.forEach((r, rIdx) => {
+                    ['p0', 'p50', 'p100'].forEach((k) => {
+                        if (r[k]) {
+                            allSlotPromises.push(
+                                loadImageMeta(r[k]).then(meta => ({ rIdx, k, meta }))
+                            );
+                        }
+                    });
+                });
+                const loadedImages = await Promise.all(allSlotPromises);
+                const imageMap = new Map();
+                loadedImages.forEach(item => {
+                    if (item.meta) imageMap.set(`${item.rIdx}_${item.k}`, item.meta);
+                });
+
+                for (let pageIdx = 0; pageIdx < totalDocPages; pageIdx++) {
+                    pdf.addPage('a4', 'portrait');
+                    pdf.setTextColor(15, 23, 42);
+                    pdf.setDrawColor(15, 23, 42);
+
+                    let curY = MARGIN;
+
+                    const kopH = 14.5;
+                    pdf.setLineWidth(0.55);
+                    pdf.rect(MARGIN, curY, CONTENT_W, kopH);
+
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(10);
+                    pdf.text('DOKUMENTASI FOTO', PAGE_W / 2, curY + 4.8, { align: 'center' });
+
+                    pdf.setFontSize(7.5);
+                    pdf.text('PEKERJAAN PEMOTONGAN RUMPUT, PERAWATAN TANAMAN DAN KEBERSIHAN', PAGE_W / 2, curY + 9.0, { align: 'center' });
+                    pdf.text('PADA RUAS TOL KANCI - PEJAGAN TAHUN 2026', PAGE_W / 2, curY + 12.7, { align: 'center' });
+
+                    curY += kopH + 2.5;
+
+                    pdf.setFontSize(7.5);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text('PERIODE :', MARGIN + 0.5, curY + 3.2);
+                    pdf.text((reportData.headerPeriode || '').toUpperCase(), MARGIN + 21, curY + 3.2);
+
+                    pdf.text('LOKASI :', MARGIN + 0.5, curY + 7.6);
+                    pdf.text((reportData.headerLokasi || '').toUpperCase(), MARGIN + 21, curY + 7.6);
+
+                    pdf.text('MINGGU KE -', PAGE_W - MARGIN - 16, curY + 5.4, { align: 'right' });
+                    pdf.setFontSize(8.5);
+                    pdf.text((reportData.headerMinggu || '').toUpperCase(), PAGE_W - MARGIN - 8, curY + 5.4, { align: 'center' });
+
+                    curY += 10.5;
+
+                    const startIdx = pageIdx * ROWS_PER_PAGE;
+                    const pageRows = reportData.rows.slice(startIdx, startIdx + ROWS_PER_PAGE);
+                    const ROW_H = 44.5;
+                    const HEADER_NAVY_H = 6.0;
+                    const SUB_PCT_H = 4.8;
+                    const PHOTO_AREA_H = ROW_H - HEADER_NAVY_H - SUB_PCT_H;
+                    const COL_W = CONTENT_W / 3;
+
+                    for (let localIdx = 0; localIdx < pageRows.length; localIdx++) {
+                        const globalIdx = startIdx + localIdx;
+                        const row = pageRows[localIdx];
+                        const rowNumber = globalIdx + 1;
+
+                        pdf.setDrawColor(15, 23, 42);
+                        pdf.setLineWidth(0.5);
+                        pdf.rect(MARGIN, curY, CONTENT_W, ROW_H);
+
+                        pdf.setFillColor(30, 58, 138);
+                        pdf.rect(MARGIN, curY, CONTENT_W, HEADER_NAVY_H, 'F');
+                        pdf.rect(MARGIN, curY, CONTENT_W, HEADER_NAVY_H, 'S');
+
+                        pdf.line(MARGIN + COL_W, curY, MARGIN + COL_W, curY + ROW_H);
+                        pdf.line(MARGIN + (COL_W * 2), curY + HEADER_NAVY_H, MARGIN + (COL_W * 2), curY + ROW_H);
+
+                        const numBoxW = 7.5;
+                        pdf.setDrawColor(148, 163, 184);
+                        pdf.setLineWidth(0.25);
+                        pdf.line(MARGIN + numBoxW, curY + 0.8, MARGIN + numBoxW, curY + HEADER_NAVY_H - 0.8);
+
+                        pdf.setTextColor(255, 255, 255);
+                        pdf.setFont('helvetica', 'bold');
+                        pdf.setFontSize(7);
+                        pdf.text(String(rowNumber), MARGIN + (numBoxW / 2), curY + 4.1, { align: 'center' });
+
+                        const dateCenterX = MARGIN + numBoxW + ((COL_W - numBoxW) / 2);
+                        pdf.setFontSize(6.6);
+                        pdf.text((row.date || '').toUpperCase(), dateCenterX, curY + 4.1, { align: 'center', maxWidth: COL_W - numBoxW - 2 });
+
+                        const titleCenterX = MARGIN + COL_W + COL_W;
+                        pdf.text((row.title || '').toUpperCase(), titleCenterX, curY + 4.1, { align: 'center', maxWidth: (COL_W * 2) - 4 });
+
+                        const subY = curY + HEADER_NAVY_H;
+                        pdf.setDrawColor(15, 23, 42);
+                        pdf.setLineWidth(0.45);
+                        pdf.line(MARGIN, subY + SUB_PCT_H, MARGIN + CONTENT_W, subY + SUB_PCT_H);
+
+                        pdf.setTextColor(15, 23, 42);
+                        pdf.setFontSize(7);
+                        pdf.text('0%', MARGIN + (COL_W * 0.5), subY + 3.4, { align: 'center' });
+                        pdf.text('50%', MARGIN + (COL_W * 1.5), subY + 3.4, { align: 'center' });
+                        pdf.text('100%', MARGIN + (COL_W * 2.5), subY + 3.4, { align: 'center' });
+
+                        const photoTopY = subY + SUB_PCT_H;
+                        const pad = 0.8;
+                        const maxBoxW = COL_W - (pad * 2);
+                        const maxBoxH = PHOTO_AREA_H - (pad * 2);
+
+                        ['p0', 'p50', 'p100'].forEach((pKey, cIdx) => {
+                            const meta = imageMap.get(`${globalIdx}_${pKey}`);
+                            if (!meta) return;
+
+                            const ratio = Math.min(maxBoxW / meta.w, maxBoxH / meta.h);
+                            const drawW = meta.w * ratio;
+                            const drawH = meta.h * ratio;
+                            const drawX = MARGIN + (cIdx * COL_W) + ((COL_W - drawW) / 2);
+                            const drawY = photoTopY + ((PHOTO_AREA_H - drawH) / 2);
+
+                            pdf.addImage(meta.img, 'JPEG', drawX, drawY, drawW, drawH, undefined, 'FAST');
+                        });
+
+                        curY += ROW_H + 2.0;
+                    }
+
+                    if (pageIdx === totalDocPages - 1) {
+                        const signY = curY + 3.0;
+                        const leftCenterX = MARGIN + (CONTENT_W * 0.25);
+                        const rightCenterX = MARGIN + (CONTENT_W * 0.75);
+
+                        pdf.setTextColor(15, 23, 42);
+                        pdf.setFont('helvetica', 'bold');
+                        pdf.setFontSize(7.5);
+
+                        pdf.text((reportData.signLeftTitle || '').toUpperCase(), leftCenterX, signY + 4, { align: 'center' });
+                        pdf.text((reportData.signLeftCompany || '').toUpperCase(), leftCenterX, signY + 7.8, { align: 'center' });
+
+                        const leftName = (reportData.signLeftName || '').toUpperCase();
+                        pdf.text(leftName, leftCenterX, signY + 21.5, { align: 'center' });
+                        const leftNameW = pdf.getTextWidth(leftName);
+                        pdf.setLineWidth(0.3);
+                        pdf.line(leftCenterX - (leftNameW / 2), signY + 22.2, leftCenterX + (leftNameW / 2), signY + 22.2);
+
+                        pdf.setFontSize(7);
+                        pdf.text((reportData.signLeftRole || '').toUpperCase(), leftCenterX, signY + 25.6, { align: 'center' });
+
+                        pdf.setFontSize(7.5);
+                        pdf.text((reportData.signRightLocationDate || '').toUpperCase(), rightCenterX, signY, { align: 'center' });
+                        pdf.text((reportData.signRightTitle || '').toUpperCase(), rightCenterX, signY + 4, { align: 'center' });
+                        pdf.text((reportData.signRightCompany || '').toUpperCase(), rightCenterX, signY + 7.8, { align: 'center' });
+
+                        const rightName = (reportData.signRightName || '').toUpperCase();
+                        pdf.text(rightName, rightCenterX, signY + 21.5, { align: 'center' });
+                        const rightNameW = pdf.getTextWidth(rightName);
+                        pdf.line(rightCenterX - (rightNameW / 2), signY + 22.2, rightCenterX + (rightNameW / 2), signY + 22.2);
+
+                        pdf.setFontSize(7);
+                        pdf.text((reportData.signRightRole || '').toUpperCase(), rightCenterX, signY + 25.6, { align: 'center' });
+                    }
+
+                    const footerY = PAGE_H - MARGIN - 2.5;
+                    pdf.setDrawColor(148, 163, 184);
+                    pdf.setLineWidth(0.25);
+                    pdf.line(MARGIN, footerY - 2.8, PAGE_W - MARGIN, footerY - 2.8);
+
+                    pdf.setTextColor(71, 85, 105);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(6.5);
+                    pdf.text('LAMPIRAN DOKUMENTASI PEKERJAAN • RUAS TOL KANCI - PEJAGAN', MARGIN, footerY);
+
+                    pdf.setTextColor(15, 23, 42);
+                    pdf.text(`HALAMAN ${pageIdx + 1} DARI ${totalDocPages}`, PAGE_W - MARGIN, footerY, { align: 'right' });
+                }
+
+                const safeTitle = (reportData.headerPeriode || 'DOKUMENTASI').replace(/[^A-Z0-9\-]+/gi, '_');
+                pdf.save(`LAPORAN_DOKUMENTASI_${safeTitle}.pdf`);
+                showToast("PDF BERHASIL", "DOKUMEN PDF VEKTOR SELESAI DALAM SEKEJAP!", "success");
+            } catch (err) {
+                console.error(err);
+                showToast("GAGAL EXPORT PDF", "TERJADI KESALAHAN SAAT MEMBUAT PDF.", "error");
+            }
+        }
+
+        function showToast(title, msg, type = "success") {
+            const toast = document.getElementById('toast');
+            const titleEl = document.getElementById('toastTitle');
+            const msgEl = document.getElementById('toastMsg');
+            const iconEl = document.getElementById('toastIcon');
+            if (!toast) return;
+
+            titleEl.textContent = title;
+            msgEl.textContent = msg;
+
+            iconEl.className = "fa-solid text-base ";
+            if (type === "error") iconEl.className += "fa-circle-xmark text-rose-400";
+            else if (type === "info") iconEl.className += "fa-circle-info text-cyan-400";
+            else iconEl.className += "fa-circle-check text-emerald-400";
+
+            toast.classList.remove('translate-y-32', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                toast.classList.add('translate-y-32', 'opacity-0');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 3200);
+        }
+    </script>
+</body>
+</html>
